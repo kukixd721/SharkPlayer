@@ -1,0 +1,805 @@
+package com.example.mp3.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
+import com.example.mp3.LocalStrings
+import com.example.mp3.PlaylistManager
+import com.example.mp3.Song
+import com.example.mp3.Video
+import com.example.mp3.ui.components.CompactAlbumCard
+import com.example.mp3.ui.components.VideoList
+import java.io.File
+import android.widget.Toast
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+fun LibraryTab(
+    selectedMusicTab: Int,
+    onSelectedMusicTabChange: (Int) -> Unit,
+    tabs: List<String>,
+    finalSortedSongs: List<Song>,
+    player: Player?,
+    isPlaying: Boolean,
+    favoriteIds: Set<Long>,
+    toggleFavorite: (Long) -> Unit,
+    onAddToPlaylist: (Song) -> Unit,
+    songList: List<Song>,
+    onSongListChange: (List<Song>) -> Unit,
+    videos: List<Video>,
+    components: PlayerComponents,
+    settings: PlayerSettings,
+    onRefreshLibrary: () -> Unit,
+    onIgnoreFolder: (String) -> Unit,
+    ignoredFolders: Set<String>,
+    browsingArtist: String?,
+    onBrowsingArtistChange: (String?) -> Unit,
+    browsingAlbum: String?,
+    onBrowsingAlbumChange: (String?) -> Unit,
+    browsingPlaylist: String?,
+    onBrowsingPlaylistChange: (String?) -> Unit,
+    browsingFolder: String?,
+    onBrowsingFolderChange: (String?) -> Unit,
+    sortOrder: Int,
+    onSortOrderChange: (Int) -> Unit,
+    showClearQueueConfirm: Boolean,
+    onShowClearQueueConfirmChange: (Boolean) -> Unit,
+    onVideoClick: (Video) -> Unit,
+    searchQuery: String,
+    onCurrentTabChange: (Int) -> Unit,
+    songsByArtist: Map<String, List<Song>>,
+    songsByAlbum: Map<String, List<Song>>,
+    songsByFolder: Map<String, List<Song>>,
+    favoriteSongs: List<Song>,
+    playlistsNames: Set<String>,
+    onPlaylistsNamesChange: (Set<String>) -> Unit,
+    onCreatePlaylist: () -> Unit,
+    onRenamePlaylist: (String, String) -> Unit,
+    onDeletePlaylist: (String) -> Unit,
+    onSetPlaylistImage: (String, String?) -> Unit,
+    onEditPlaylist: (String) -> Unit,
+    handleUpdateTags: (Song, String, String, String, String, String, String, ByteArray?) -> Unit,
+    onVideoFullScreenChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    val strings = LocalStrings.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // --- CATEGORY TABS ---
+        ScrollableTabRow(
+            selectedTabIndex = selectedMusicTab,
+            edgePadding = 16.dp,
+            containerColor = Color.Transparent,
+            divider = {},
+            indicator = {}
+        ) {
+            tabs.forEachIndexed { index, title ->
+                val isSelected = selectedMusicTab == index
+                Tab(
+                    selected = isSelected,
+                    onClick = {
+                        onSelectedMusicTabChange(index)
+                        onBrowsingArtistChange(null)
+                        onBrowsingAlbumChange(null)
+                        onBrowsingPlaylistChange(null)
+                        onBrowsingFolderChange(null)
+                    },
+                    modifier = Modifier
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                        .height(40.dp)
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            shape = CircleShape
+                        )
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                    text = {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                )
+            }
+        }
+
+        // --- TOOLBAR (Shuffle, View Mode, Sort) ---
+        if (selectedMusicTab != 6 && selectedMusicTab != 7 && selectedMusicTab != 8) { // No toolbar for Queue, Videos, Settings
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        player?.stop()
+                        player?.clearMediaItems()
+                        val shuffled = finalSortedSongs.shuffled()
+                        val mediaItems = shuffled.map { it.toMediaItem() }
+                        player?.addMediaItems(mediaItems)
+                        player?.prepare()
+                        player?.play()
+                    },
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Shuffle", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(Modifier.weight(1f))
+
+                IconButton(
+                    onClick = { settings.onUseGridViewLibraryChange(!settings.useGridViewLibrary) },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Icon(
+                        if (settings.useGridViewLibrary) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                        null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = { onCurrentTabChange(1) },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                var showSortMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(
+                        onClick = { showSortMenu = true },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Sort, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false },
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(strings.recentlyAdded) },
+                            onClick = { onSortOrderChange(0); showSortMenu = false },
+                            leadingIcon = { Icon(Icons.Default.Schedule, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("A-Z") },
+                            onClick = { onSortOrderChange(1); showSortMenu = false },
+                            leadingIcon = { Icon(Icons.Default.SortByAlpha, null) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(strings.favorites) },
+                            onClick = { onSortOrderChange(2); showSortMenu = false },
+                            leadingIcon = { Icon(Icons.Default.Favorite, null) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- CONTENT AREA ---
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 8.dp)
+                .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
+            BackHandler(enabled = browsingArtist != null || browsingAlbum != null || browsingPlaylist != null || browsingFolder != null) {
+                onBrowsingArtistChange(null)
+                onBrowsingAlbumChange(null)
+                onBrowsingPlaylistChange(null)
+                onBrowsingFolderChange(null)
+            }
+
+            AnimatedContent(
+                targetState = selectedMusicTab,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(220, delayMillis = 90)) togetherWith
+                            fadeOut(animationSpec = tween(90))
+                }, label = "MusicTabTransition"
+            ) { targetMusicTab ->
+                when (targetMusicTab) {
+                    0 -> { // ALL SONGS
+                        if (settings.useGridViewLibrary) {
+                            val itemsPerRow = 2
+                            val rows = finalSortedSongs.chunked(itemsPerRow)
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 140.dp, top = 8.dp)
+                            ) {
+                                items(rows.size) { rowIndex ->
+                                    val rowItems = rows[rowIndex]
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        rowItems.forEach { song ->
+                                            CompactAlbumCard(
+                                                song = song,
+                                                onSongClick = { s ->
+                                                    player?.stop()
+                                                    player?.clearMediaItems()
+                                                    
+                                                    val songsToPlay = finalSortedSongs
+                                                    val startIndex = songsToPlay.indexOf(s)
+                                                    
+                                                    val finalOrder = if (startIndex != -1) {
+                                                        songsToPlay.subList(startIndex, songsToPlay.size) + songsToPlay.subList(0, startIndex)
+                                                    } else {
+                                                        listOf(s)
+                                                    }
+                                                    
+                                                    val mediaItems = finalOrder.map { it.toMediaItem() }
+                                                    player?.addMediaItems(mediaItems)
+                                                    player?.prepare()
+                                                    player?.play()
+                                                },
+                                                getAlbumArt = { settings.getAlbumArt(it) },
+                                                settings = settings,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        if (rowItems.size < itemsPerRow) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            player?.let { p ->
+                                components.MusicList(
+                                    finalSortedSongs,
+                                    p,
+                                    isPlaying,
+                                    MusicListConfig(
+                                        activeMediaItem = p.currentMediaItem,
+                                        favoriteIds = favoriteIds,
+                                        onToggleFavorite = toggleFavorite,
+                                        onAddToPlaylist = onAddToPlaylist,
+                                        onAddToQueue = { song ->
+                                            p.addMediaItem(song.toMediaItem())
+                                            Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onPlayNext = { song ->
+                                            val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                            p.addMediaItem(index, song.toMediaItem())
+                                            Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onPlayAll = { songsToPlay, startIndex ->
+                                            p.stop()
+                                            p.clearMediaItems()
+                                            
+                                            val finalOrder = if (startIndex != -1) {
+                                                songsToPlay.subList(startIndex, songsToPlay.size) + songsToPlay.subList(0, startIndex)
+                                            } else {
+                                                songsToPlay
+                                            }
+                                            
+                                            val mediaItems = finalOrder.map { it.toMediaItem() }
+                                            p.addMediaItems(mediaItems)
+                                            p.prepare()
+                                            p.play()
+                                        },
+                                        onDeleteSong = { song ->
+                                            try {
+                                                val file = File(song.data)
+                                                if (file.exists() && file.delete()) {
+                                                    onSongListChange(songList.filter { it.id != song.id })
+                                                    Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                }
+                                            } catch (e: Exception) {}
+                                        },
+                                        onUpdateTags = handleUpdateTags,
+                                        settings = settings
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    1 -> { // ARTISTS
+                        AnimatedContent(
+                            targetState = browsingArtist,
+                            transitionSpec = {
+                                if (targetState != null) {
+                                    slideInHorizontally { it } + fadeIn() togetherWith
+                                            slideOutHorizontally { -it / 2 } + fadeOut()
+                                } else {
+                                    slideInHorizontally { -it / 2 } + fadeIn() togetherWith
+                                            slideOutHorizontally { it } + fadeOut()
+                                }.using(SizeTransform(clip = false))
+                            }, label = "ArtistDrillDown"
+                        ) { currentBrowsingArtist ->
+                            if (currentBrowsingArtist == null) {
+                                components.ArtistList(
+                                    songsByArtist,
+                                    player?.currentMediaItem,
+                                    { songs -> onBrowsingArtistChange(songs.firstOrNull()?.artist) },
+                                    settings,
+                                    searchQuery
+                                )
+                            } else {
+                                val artistSongs = (songsByArtist[currentBrowsingArtist] ?: emptyList()).filter {
+                                    it.title.contains(searchQuery, ignoreCase = true)
+                                }
+                                player?.let { p ->
+                                    components.SubMusicList(
+                                        currentBrowsingArtist,
+                                        artistSongs,
+                                        p,
+                                        isPlaying,
+                                        MusicListConfig(
+                                            activeMediaItem = p.currentMediaItem,
+                                            favoriteIds = favoriteIds,
+                                            onToggleFavorite = toggleFavorite,
+                                            onAddToQueue = { song ->
+                                                p.addMediaItem(song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayNext = { song ->
+                                                val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                                p.addMediaItem(index, song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayAll = { songsToPlay, startIndex ->
+                                                p.stop()
+                                                p.clearMediaItems()
+                                                
+                                                val finalOrder = if (startIndex != -1) {
+                                                    songsToPlay.subList(startIndex, songsToPlay.size) + songsToPlay.subList(0, startIndex)
+                                                } else {
+                                                    songsToPlay
+                                                }
+                                                
+                                                val mediaItems = finalOrder.map { it.toMediaItem() }
+                                                
+                                                p.addMediaItems(mediaItems)
+                                                p.prepare()
+                                                p.play()
+                                            },
+                                            onDeleteSong = { song ->
+                                                try {
+                                                    val file = File(song.data)
+                                                    if (file.exists() && file.delete()) {
+                                                        onSongListChange(songList.filter { it.id != song.id })
+                                                        Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {}
+                                            },
+                                            onUpdateTags = handleUpdateTags,
+                                            settings = settings
+                                        ),
+                                        { onBrowsingArtistChange(null) },
+                                        null,
+                                        null
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    2 -> { // ALBUMS
+                        AnimatedContent(
+                            targetState = browsingAlbum,
+                            transitionSpec = {
+                                if (targetState != null) {
+                                    slideInHorizontally { it } + fadeIn() togetherWith
+                                            slideOutHorizontally { -it / 2 } + fadeOut()
+                                } else {
+                                    slideInHorizontally { -it / 2 } + fadeIn() togetherWith
+                                            slideOutHorizontally { it } + fadeOut()
+                                }.using(SizeTransform(clip = false))
+                            }, label = "AlbumDrillDown"
+                        ) { currentBrowsingAlbum ->
+                            if (currentBrowsingAlbum == null) {
+                                components.AlbumList(
+                                    songsByAlbum,
+                                    player?.currentMediaItem,
+                                    { songs -> onBrowsingAlbumChange(songs.firstOrNull()?.album) },
+                                    settings,
+                                    searchQuery
+                                )
+                            } else {
+                                val albumSongs = (songsByAlbum[currentBrowsingAlbum] ?: emptyList()).filter {
+                                    it.title.contains(searchQuery, ignoreCase = true)
+                                }
+                                player?.let { p ->
+                                    components.SubMusicList(
+                                        currentBrowsingAlbum,
+                                        albumSongs,
+                                        p,
+                                        isPlaying,
+                                        MusicListConfig(
+                                            activeMediaItem = p.currentMediaItem,
+                                            favoriteIds = favoriteIds,
+                                            onToggleFavorite = toggleFavorite,
+                                            onAddToQueue = { song ->
+                                                p.addMediaItem(song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayNext = { song ->
+                                                val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                                p.addMediaItem(index, song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayAll = { s, startIdx ->
+                                                p.stop()
+                                                p.clearMediaItems()
+                                                
+                                                val finalOrder = if (startIdx != -1) {
+                                                    s.subList(startIdx, s.size) + s.subList(0, startIdx)
+                                                } else {
+                                                    s
+                                                }
+                                                
+                                                val mediaItems = finalOrder.map { it.toMediaItem() }
+                                                p.addMediaItems(mediaItems)
+                                                p.prepare()
+                                                p.play()
+                                            },
+                                            onAddToPlaylist = onAddToPlaylist,
+                                            onDeleteSong = { song ->
+                                                try {
+                                                    val file = File(song.data)
+                                                    if (file.exists() && file.delete()) {
+                                                        onSongListChange(songList.filter { it.id != song.id })
+                                                        Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {}
+                                            },
+                                            onUpdateTags = handleUpdateTags,
+                                            settings = settings
+                                        ),
+                                        { onBrowsingAlbumChange(null) },
+                                        null,
+                                        null
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    3 -> { // PLAYLISTS
+                        AnimatedContent(
+                            targetState = browsingPlaylist,
+                            transitionSpec = {
+                                if (targetState != null) {
+                                    slideInHorizontally { it } + fadeIn() togetherWith
+                                            slideOutHorizontally { -it / 2 } + fadeOut()
+                                } else {
+                                    slideInHorizontally { -it / 2 } + fadeIn() togetherWith
+                                            slideOutHorizontally { it } + fadeOut()
+                                }.using(SizeTransform(clip = false))
+                            }, label = "PlaylistDrillDown"
+                        ) { currentBrowsingPlaylist ->
+                            if (currentBrowsingPlaylist == null) {
+                                val filteredPlaylists = if (searchQuery.isEmpty()) playlistsNames
+                                else playlistsNames.filter { it.contains(searchQuery, ignoreCase = true) }
+
+                                components.PlaylistList(
+                                    filteredPlaylists.toSet(),
+                                    { name -> onBrowsingPlaylistChange(name) },
+                                    onCreatePlaylist,
+                                    { name -> onDeletePlaylist(name) },
+                                    { oldName, newName -> onRenamePlaylist(oldName, newName) },
+                                    { name, imageUri -> onSetPlaylistImage(name, imageUri) },
+                                    songList,
+                                    settings
+                                )
+                            } else {
+                                val playlistSongsIds = PlaylistManager.getSongsInPlaylist(context, currentBrowsingPlaylist)
+                                val playlistSongs = songList.filter { it.id in playlistSongsIds }
+                                    .filter { it.title.contains(searchQuery, ignoreCase = true) }
+
+                                player?.let { p ->
+                                    components.SubMusicList(
+                                        currentBrowsingPlaylist,
+                                        playlistSongs,
+                                        p,
+                                        isPlaying,
+                                        MusicListConfig(
+                                            activeMediaItem = p.currentMediaItem,
+                                            favoriteIds = favoriteIds,
+                                            onToggleFavorite = toggleFavorite,
+                                            onAddToQueue = { song ->
+                                                p.addMediaItem(song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayNext = { song ->
+                                                val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                                p.addMediaItem(index, song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayAll = { s, startIdx ->
+                                                p.stop()
+                                                p.clearMediaItems()
+                                                
+                                                val finalOrder = if (startIdx != -1) {
+                                                    s.subList(startIdx, s.size) + s.subList(0, startIdx)
+                                                } else {
+                                                    s
+                                                }
+                                                
+                                                val mediaItems = finalOrder.map { it.toMediaItem() }
+                                                p.addMediaItems(mediaItems)
+                                                p.prepare()
+                                                p.play()
+                                            },
+                                            onAddToPlaylist = onAddToPlaylist,
+                                            onDeleteSong = { song ->
+                                                try {
+                                                    val file = File(song.data)
+                                                    if (file.exists() && file.delete()) {
+                                                        onSongListChange(songList.filter { it.id != song.id })
+                                                        Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {}
+                                            },
+                                            onUpdateTags = handleUpdateTags,
+                                            settings = settings
+                                        ),
+                                        { onBrowsingPlaylistChange(null) },
+                                        PlaylistManager.getPlaylistImage(context, currentBrowsingPlaylist),
+                                        { onEditPlaylist(currentBrowsingPlaylist) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    4 -> { // FOLDERS
+                        AnimatedContent(
+                            targetState = browsingFolder,
+                            transitionSpec = {
+                                if (targetState != null) {
+                                    slideInHorizontally { it } + fadeIn() togetherWith
+                                            slideOutHorizontally { -it / 2 } + fadeOut()
+                                } else {
+                                    slideInHorizontally { -it / 2 } + fadeIn() togetherWith
+                                            slideOutHorizontally { it } + fadeOut()
+                                }.using(SizeTransform(clip = false))
+                            }, label = "FolderDrillDown"
+                        ) { currentBrowsingFolder ->
+                            if (currentBrowsingFolder == null) {
+                                components.FolderList(
+                                    songsByFolder,
+                                    { songs -> onBrowsingFolderChange(File(songs.first().data).parent) },
+                                    onIgnoreFolder,
+                                    ignoredFolders,
+                                    settings,
+                                    searchQuery
+                                )
+                            } else {
+                                val folderSongs = (songsByFolder[currentBrowsingFolder] ?: emptyList()).filter {
+                                    it.title.contains(searchQuery, ignoreCase = true)
+                                }
+                                player?.let { p ->
+                                    components.SubMusicList(
+                                        currentBrowsingFolder.substringAfterLast("/"),
+                                        folderSongs,
+                                        p,
+                                        isPlaying,
+                                        MusicListConfig(
+                                            activeMediaItem = p.currentMediaItem,
+                                            favoriteIds = favoriteIds,
+                                            onToggleFavorite = toggleFavorite,
+                                            onAddToQueue = { song ->
+                                                p.addMediaItem(song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayNext = { song ->
+                                                val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                                p.addMediaItem(index, song.toMediaItem())
+                                                Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onPlayAll = { s, startIdx ->
+                                                p.stop()
+                                                p.clearMediaItems()
+                                                
+                                                val finalOrder = if (startIdx != -1) {
+                                                    s.subList(startIdx, s.size) + s.subList(0, startIdx)
+                                                } else {
+                                                    s
+                                                }
+                                                
+                                                val mediaItems = finalOrder.map { it.toMediaItem() }
+                                                p.addMediaItems(mediaItems)
+                                                p.prepare()
+                                                p.play()
+                                            },
+                                            onAddToPlaylist = onAddToPlaylist,
+                                            onDeleteSong = { song ->
+                                                try {
+                                                    val file = File(song.data)
+                                                    if (file.exists() && file.delete()) {
+                                                        onSongListChange(songList.filter { it.id != song.id })
+                                                        Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                    }
+                                                } catch (e: Exception) {}
+                                            },
+                                            onUpdateTags = handleUpdateTags,
+                                            settings = settings
+                                        ),
+                                        { onBrowsingFolderChange(null) },
+                                        null,
+                                        null
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    5 -> { // FAVORITES
+                        player?.let { p ->
+                            components.MusicList(
+                                favoriteSongs.filter { it.title.contains(searchQuery, ignoreCase = true) },
+                                p,
+                                isPlaying,
+                                MusicListConfig(
+                                    activeMediaItem = p.currentMediaItem,
+                                    favoriteIds = favoriteIds,
+                                    onToggleFavorite = toggleFavorite,
+                                    onAddToPlaylist = onAddToPlaylist,
+                                    onAddToQueue = { song ->
+                                        p.addMediaItem(song.toMediaItem())
+                                        Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                    },
+                                    onPlayNext = { song ->
+                                        val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                        p.addMediaItem(index, song.toMediaItem())
+                                        Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                    },
+                                    onDeleteSong = { song ->
+                                        try {
+                                            val file = File(song.data)
+                                            if (file.exists() && file.delete()) {
+                                                onSongListChange(songList.filter { it.id != song.id })
+                                                Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                            }
+                                        } catch (e: Exception) {}
+                                    },
+                                    onUpdateTags = handleUpdateTags,
+                                    settings = settings,
+                                    emptyMessage = strings.noFavorites
+                                )
+                            )
+                        }
+                    }
+
+                    6 -> { // QUEUE
+                        val queueItems = remember(player?.mediaItemCount) {
+                            val p = player ?: return@remember emptyList()
+                            (0 until p.mediaItemCount).map { p.getMediaItemAt(it) }
+                        }
+                        val queueSongs = queueItems.mapNotNull { mi -> songList.find { it.id.toString() == mi.mediaId } }
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Siguiente en la cola",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (queueSongs.isNotEmpty()) {
+                                    IconButton(onClick = { onShowClearQueueConfirmChange(true) }) {
+                                        Icon(Icons.Default.Delete, contentDescription = strings.clearQueue, tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+
+                            player?.let { p ->
+                                components.MusicList(
+                                    queueSongs,
+                                    p,
+                                    isPlaying,
+                                    MusicListConfig(
+                                        activeMediaItem = p.currentMediaItem,
+                                        favoriteIds = favoriteIds,
+                                        onToggleFavorite = toggleFavorite,
+                                        onAddToPlaylist = onAddToPlaylist,
+                                        onAddToQueue = { song ->
+                                            p.addMediaItem(song.toMediaItem())
+                                            Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onPlayNext = { song ->
+                                            val index = if (p.mediaItemCount == 0) 0 else p.currentMediaItemIndex + 1
+                                            p.addMediaItem(index, song.toMediaItem())
+                                            Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onRemoveFromQueue = { index -> p.removeMediaItem(index) },
+                                        onMoveQueueItem = { from, to -> p.moveMediaItem(from, to) },
+                                        isDraggable = true,
+                                        onDeleteSong = { song ->
+                                            try {
+                                                val file = File(song.data)
+                                                if (file.exists() && file.delete()) {
+                                                    onSongListChange(songList.filter { it.id != song.id })
+                                                    Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                                }
+                                            } catch (e: Exception) {}
+                                        },
+                                        onUpdateTags = handleUpdateTags,
+                                        settings = settings,
+                                        emptyMessage = "La cola está vacía"
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    7 -> { // VIDEOS
+                        VideoList(
+                            videos = videos,
+                            onVideoClick = { video ->
+                                player?.setMediaItem(video.toMediaItem())
+                                player?.prepare()
+                                player?.play()
+                                onVideoFullScreenChange(true)
+                            },
+                            settings = settings
+                        )
+                    }
+
+                    8 -> { // SETTINGS (INTERNAL)
+                        // This would need more extraction if we want to keep it here
+                    }
+                }
+            }
+        }
+    }
+}
