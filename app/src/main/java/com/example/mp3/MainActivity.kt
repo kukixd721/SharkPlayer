@@ -29,6 +29,9 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import com.example.mp3.ui.components.*
 import com.example.mp3.ui.screens.*
 import com.example.mp3.ui.theme.blendWithNeutral
@@ -61,6 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lanzarPermisos()
+        StatisticsManager.performIntegrityCheck(this)
 
         setContent {
             val context = LocalContext.current
@@ -96,7 +100,7 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val colorScheme = when {
-                    viewModel.useArtDynamicColor -> {
+                    viewModel.useArtDynamicColor || (viewModel.useImageDynamicColor && viewModel.backgroundImageUri != null) -> {
                         buildCustomColorScheme(
                             Color(viewModel.artPrimaryColor),
                             Color(viewModel.artSecondaryColor),
@@ -136,149 +140,178 @@ class MainActivity : ComponentActivity() {
                     colorScheme = colorScheme,
                     typography = typography
                 ) {
-                    Surface {
-                        if (viewModel.showWelcome) {
-                            WelcomeScreen(
-                                state = WelcomeState(
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // FONDO DE IMAGEN PERSONALIZADO
+                        if (viewModel.backgroundImageUri != null) {
+                            val context = LocalContext.current
+                            val painter = coil.compose.rememberAsyncImagePainter(
+                                model = coil.request.ImageRequest.Builder(context)
+                                    .data(viewModel.backgroundImageUri)
+                                    .crossfade(true)
+                                    .build()
+                            )
+                            androidx.compose.foundation.Image(
+                                painter = painter,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                alpha = viewModel.backgroundAlpha
+                            )
+                        }
+
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = if (viewModel.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.background
+                        ) {
+                            if (viewModel.showWelcome) {
+                                WelcomeScreen(
+                                    state = WelcomeState(
+                                        useDynamicColor = viewModel.useDynamicColor,
+                                        onDynamicColorChange = { viewModel.updateDynamicColor(it) },
+                                        useArtDynamicColor = viewModel.useArtDynamicColor,
+                                        onUseArtDynamicColorChange = { viewModel.updateUseArtDynamicColor(it) },
+                                        karaokeEnabled = viewModel.isKaraokeEnabled,
+                                        onKaraokeChange = { viewModel.updateKaraokeEnabled(it) },
+                                        selectedLanguage = viewModel.selectedLanguage,
+                                        onLanguageChange = { viewModel.updateLanguage(it) },
+                                        isScanning = viewModel.isScanning.value,
+                                        scanProgress = viewModel.scanProgress.floatValue,
+                                        scanStatus = viewModel.scanStatus.value,
+                                        onStartScan = { viewModel.startScan(strings) },
+                                        onFinish = { viewModel.updateWelcomeFinished() }
+                                    )
+                                )
+                            } else {
+                                val settings = PlayerSettings(
                                     useDynamicColor = viewModel.useDynamicColor,
                                     onDynamicColorChange = { viewModel.updateDynamicColor(it) },
-                                    useArtDynamicColor = viewModel.useArtDynamicColor,
-                                    onUseArtDynamicColorChange = { viewModel.updateUseArtDynamicColor(it) },
+                                    roundnessLarge = viewModel.roundnessLarge,
+                                    onRoundnessLargeChange = { viewModel.updateRoundnessLarge(it) },
+                                    roundnessMedium = viewModel.roundnessMedium,
+                                    onRoundnessMediumChange = { viewModel.updateRoundnessMedium(it) },
+                                    roundnessSmall = viewModel.roundnessSmall,
+                                    onRoundnessSmallChange = { viewModel.updateRoundnessSmall(it) },
+                                    customAccentColor = Color(viewModel.customAccentColor),
+                                    onCustomAccentColorChange = { viewModel.updateCustomAccentColor(it.toArgb()) },
+                                    customSecondaryColor = Color(viewModel.customSecondaryColor),
+                                    onCustomSecondaryColorChange = { viewModel.updateCustomSecondaryColor(it.toArgb()) },
+                                    customTertiaryColor = Color(viewModel.customTertiaryColor),
+                                    onCustomTertiaryColorChange = { viewModel.updateCustomTertiaryColor(it.toArgb()) },
+                                    playbackSpeed = viewModel.playbackSpeed,
+                                    onPlaybackSpeedChange = { viewModel.updatePlaybackSpeed(it) },
+                                    lyricsFontSize = viewModel.lyricsFontSize,
+                                    onLyricsFontSizeChange = { viewModel.updateLyricsFontSize(it) },
+                                    keepScreenOn = viewModel.keepScreenOn,
+                                    onKeepScreenOnChange = { viewModel.updateKeepScreenOn(it) },
+                                    crossfadeDuration = viewModel.crossfadeDuration,
+                                    onCrossfadeChange = { viewModel.updateCrossfadeDuration(it) },
+                                    crossfadeEnabled = viewModel.crossfadeEnabled,
+                                    onCrossfadeEnabledChange = { viewModel.updateCrossfadeEnabled(it) },
                                     karaokeEnabled = viewModel.isKaraokeEnabled,
                                     onKaraokeChange = { viewModel.updateKaraokeEnabled(it) },
+                                    selectedFontName = viewModel.selectedFontName,
+                                    onFontChange = { viewModel.updateFont(it) },
                                     selectedLanguage = viewModel.selectedLanguage,
                                     onLanguageChange = { viewModel.updateLanguage(it) },
-                                    isScanning = viewModel.isScanning.value,
-                                    scanProgress = viewModel.scanProgress.floatValue,
-                                    scanStatus = viewModel.scanStatus.value,
-                                    onStartScan = { viewModel.startScan(strings) },
-                                    onFinish = { viewModel.updateWelcomeFinished() }
+                                    visualizerEnabled = viewModel.visualizerEnabled,
+                                    onVisualizerEnabledChange = { viewModel.updateVisualizerEnabled(it) },
+                                    showLyricsControls = viewModel.showLyricsControls,
+                                    onShowLyricsControlsChange = { viewModel.updateShowLyricsControls(it) },
+                                    showLyricsSlider = viewModel.showLyricsSlider,
+                                    onShowLyricsSliderChange = { viewModel.updateShowLyricsSlider(it) },
+                                    showLyricsMainControls = viewModel.showLyricsMainControls,
+                                    onShowLyricsMainControlsChange = { viewModel.updateShowLyricsMainControls(it) },
+                                    showLyricsExtraControls = viewModel.showLyricsExtraControls,
+                                    onShowLyricsExtraControlsChange = { viewModel.updateShowLyricsExtraControls(it) },
+                                    centerLyrics = viewModel.centerLyrics,
+                                    onCenterLyricsChange = { viewModel.updateCenterLyrics(it) },
+                                    sleepTimerRemaining = viewModel.sleepTimerRemaining,
+                                    onSetSleepTimer = { viewModel.startSleepTimer(it) },
+                                    onShowLogcat = { viewModel.showLogcat = true },
+                                    getTypography = { getTypography(it) },
+                                    getAlbumArt = { getAlbumArt(it) },
+                                    formatTime = { formatTime(it) },
+                                    rememberPlayerPosition = { rememberPlayerPosition(it) },
+                                    themeMode = viewModel.themeMode,
+                                    onThemeModeChange = { viewModel.updateThemeMode(it) },
+                                    visualizerStyle = viewModel.visualizerStyle,
+                                    onVisualizerStyleChange = { viewModel.updateVisualizerStyle(it) },
+                                    useGridViewHome = viewModel.useGridViewHome,
+                                    onUseGridViewHomeChange = { viewModel.updateUseGridViewHome(it) },
+                                    useGridViewLibrary = viewModel.useGridViewLibrary,
+                                    onUseGridViewLibraryChange = { viewModel.updateUseGridViewLibrary(it) },
+                                    useArtDynamicColor = viewModel.useArtDynamicColor,
+                                    onUseArtDynamicColorChange = { viewModel.updateUseArtDynamicColor(it) },
+                                    paletteStyle = viewModel.paletteStyle,
+                                    onPaletteStyleChange = { viewModel.updatePaletteStyle(it) },
+                                    artPrimaryColor = Color(viewModel.artPrimaryColor),
+                                    artSecondaryColor = Color(viewModel.artSecondaryColor),
+                                    artTertiaryColor = Color(viewModel.artTertiaryColor),
+                                    autoLyrics = viewModel.autoLyrics,
+                                    onAutoLyricsChange = { viewModel.updateAutoLyrics(it) },
+                                    useOledMode = viewModel.useOledMode,
+                                    onUseOledModeChange = { viewModel.updateUseOledMode(it) },
+                                    selectedCuratedPalette = viewModel.selectedCuratedPalette,
+                                    onSelectedCuratedPaletteChange = { viewModel.updateSelectedCuratedPalette(it) },
+                                    unifiedLyricsBackground = viewModel.unifiedLyricsBackground,
+                                    onUnifiedLyricsBackgroundChange = { viewModel.updateUnifiedLyricsBackground(it) },
+                                    backgroundImageUri = viewModel.backgroundImageUri,
+                                    onBackgroundImageChange = { viewModel.updateBackgroundImage(it) },
+                                    backgroundAlpha = viewModel.backgroundAlpha,
+                                    onBackgroundAlphaChange = { viewModel.updateBackgroundAlpha(it) },
+                                    useImageDynamicColor = viewModel.useImageDynamicColor,
+                                    onUseImageDynamicColorChange = { viewModel.updateUseImageDynamicColor(it) }
                                 )
-                            )
-                        } else {
-                            val settings = PlayerSettings(
-                                useDynamicColor = viewModel.useDynamicColor,
-                                onDynamicColorChange = { viewModel.updateDynamicColor(it) },
-                                roundnessLarge = viewModel.roundnessLarge,
-                                onRoundnessLargeChange = { viewModel.updateRoundnessLarge(it) },
-                                roundnessMedium = viewModel.roundnessMedium,
-                                onRoundnessMediumChange = { viewModel.updateRoundnessMedium(it) },
-                                roundnessSmall = viewModel.roundnessSmall,
-                                onRoundnessSmallChange = { viewModel.updateRoundnessSmall(it) },
-                                customAccentColor = Color(viewModel.customAccentColor),
-                                onCustomAccentColorChange = { viewModel.updateCustomAccentColor(it.toArgb()) },
-                                customSecondaryColor = Color(viewModel.customSecondaryColor),
-                                onCustomSecondaryColorChange = { viewModel.updateCustomSecondaryColor(it.toArgb()) },
-                                customTertiaryColor = Color(viewModel.customTertiaryColor),
-                                onCustomTertiaryColorChange = { viewModel.updateCustomTertiaryColor(it.toArgb()) },
-                                playbackSpeed = viewModel.playbackSpeed,
-                                onPlaybackSpeedChange = { viewModel.updatePlaybackSpeed(it) },
-                                lyricsFontSize = viewModel.lyricsFontSize,
-                                onLyricsFontSizeChange = { viewModel.updateLyricsFontSize(it) },
-                                keepScreenOn = viewModel.keepScreenOn,
-                                onKeepScreenOnChange = { viewModel.updateKeepScreenOn(it) },
-                                crossfadeDuration = viewModel.crossfadeDuration,
-                                onCrossfadeChange = { viewModel.updateCrossfadeDuration(it) },
-                                crossfadeEnabled = viewModel.crossfadeEnabled,
-                                onCrossfadeEnabledChange = { viewModel.updateCrossfadeEnabled(it) },
-                                karaokeEnabled = viewModel.isKaraokeEnabled,
-                                onKaraokeChange = { viewModel.updateKaraokeEnabled(it) },
-                                selectedFontName = viewModel.selectedFontName,
-                                onFontChange = { viewModel.updateFont(it) },
-                                selectedLanguage = viewModel.selectedLanguage,
-                                onLanguageChange = { viewModel.updateLanguage(it) },
-                                visualizerEnabled = viewModel.visualizerEnabled,
-                                onVisualizerEnabledChange = { viewModel.updateVisualizerEnabled(it) },
-                                showLyricsControls = viewModel.showLyricsControls,
-                                onShowLyricsControlsChange = { viewModel.updateShowLyricsControls(it) },
-                                showLyricsSlider = viewModel.showLyricsSlider,
-                                onShowLyricsSliderChange = { viewModel.updateShowLyricsSlider(it) },
-                                showLyricsMainControls = viewModel.showLyricsMainControls,
-                                onShowLyricsMainControlsChange = { viewModel.updateShowLyricsMainControls(it) },
-                                showLyricsExtraControls = viewModel.showLyricsExtraControls,
-                                onShowLyricsExtraControlsChange = { viewModel.updateShowLyricsExtraControls(it) },
-                                centerLyrics = viewModel.centerLyrics,
-                                onCenterLyricsChange = { viewModel.updateCenterLyrics(it) },
-                                sleepTimerRemaining = viewModel.sleepTimerRemaining,
-                                onSetSleepTimer = { viewModel.startSleepTimer(it) },
-                                onShowLogcat = { viewModel.showLogcat = true },
-                                getTypography = { getTypography(it) },
-                                getAlbumArt = { getAlbumArt(it) },
-                                formatTime = { formatTime(it) },
-                                rememberPlayerPosition = { rememberPlayerPosition(it) },
-                                themeMode = viewModel.themeMode,
-                                onThemeModeChange = { viewModel.updateThemeMode(it) },
-                                visualizerStyle = viewModel.visualizerStyle,
-                                onVisualizerStyleChange = { viewModel.updateVisualizerStyle(it) },
-                                useGridViewHome = viewModel.useGridViewHome,
-                                onUseGridViewHomeChange = { viewModel.updateUseGridViewHome(it) },
-                                useGridViewLibrary = viewModel.useGridViewLibrary,
-                                onUseGridViewLibraryChange = { viewModel.updateUseGridViewLibrary(it) },
-                                useArtDynamicColor = viewModel.useArtDynamicColor,
-                                onUseArtDynamicColorChange = { viewModel.updateUseArtDynamicColor(it) },
-                                paletteStyle = viewModel.paletteStyle,
-                                onPaletteStyleChange = { viewModel.updatePaletteStyle(it) },
-                                artPrimaryColor = Color(viewModel.artPrimaryColor),
-                                artSecondaryColor = Color(viewModel.artSecondaryColor),
-                                artTertiaryColor = Color(viewModel.artTertiaryColor),
-                                autoLyrics = viewModel.autoLyrics,
-                                onAutoLyricsChange = { viewModel.updateAutoLyrics(it) },
-                                useOledMode = viewModel.useOledMode,
-                                onUseOledModeChange = { viewModel.updateUseOledMode(it) },
-                                selectedCuratedPalette = viewModel.selectedCuratedPalette,
-                                onSelectedCuratedPaletteChange = { viewModel.updateSelectedCuratedPalette(it) },
-                                unifiedLyricsBackground = viewModel.unifiedLyricsBackground,
-                                onUnifiedLyricsBackgroundChange = { viewModel.updateUnifiedLyricsBackground(it) }
-                            )
 
-                            val components = PlayerComponents(
-                                KaraokeView = { lyrics, pos, size, centered, selectionMode, selectedIndices, showShadow, onToggle, onSeek ->
-                                    KaraokeView(
-                                        lyricsList = lyrics,
-                                        currentPositionMs = pos,
-                                        fontSize = size.sp,
-                                        centered = centered,
-                                        selectionMode = selectionMode,
-                                        selectedIndices = selectedIndices,
-                                        showShadow = showShadow,
-                                        onToggleSelection = onToggle,
-                                        onLyricClick = onSeek
-                                    )
-                                },
-                                SubMusicList = { title, songs, player, isPlaying, config, onBack, cover, onEditClick ->
-                                    SubMusicList(title, songs, player, isPlaying, config, onBack, cover, onEditClick)
-                                },
-                                ArtistList = { artists, media, onClick, settings, query ->
-                                    ArtistList(artists, media, onClick, settings, query)
-                                },
-                                AlbumList = { albums, media, onClick, settings, query ->
-                                    AlbumList(albums, media, onClick, settings, query)
-                                },
-                                FolderList = { folders, onClick, onIgnore, ignored, settings, query ->
-                                    FolderList(folders, onClick, onIgnore, ignored, settings, query)
-                                },
-                                PlaylistList = { playlists, onClick, onCreate, onDelete, onRename, onSetImage, songs, settings ->
-                                    PlaylistList(playlists, onClick, onCreate, onDelete, onRename, onSetImage, songs, settings)
-                                },
-                                MusicList = ::MusicList,
-                                MetadataRow = ::MetadataRow,
-                                EcualizadorPanel = ::EcualizadorPanel,
-                                MorphingPlayPauseButton = { isPlaying, onClick, modifier, mainColor, iconColor, iconSize, borderWidth ->
-                                    MorphingPlayPauseButton(isPlaying, onClick, modifier, mainColor, iconColor, iconSize, borderWidth)
-                                }
-                            )
+                                val components = PlayerComponents(
+                                    KaraokeView = { lyrics, pos, size, centered, selectionMode, selectedIndices, showShadow, onToggle, onSeek ->
+                                        KaraokeView(
+                                            lyricsList = lyrics,
+                                            currentPositionMs = pos,
+                                            fontSize = size.sp,
+                                            centered = centered,
+                                            selectionMode = selectionMode,
+                                            selectedIndices = selectedIndices,
+                                            showShadow = showShadow,
+                                            onToggleSelection = onToggle,
+                                            onLyricClick = onSeek
+                                        )
+                                    },
+                                    SubMusicList = { title, songs, player, isPlaying, config, onBack, cover, onEditClick ->
+                                        SubMusicList(title, songs, player, isPlaying, config, onBack, cover, onEditClick)
+                                    },
+                                    ArtistList = { artists, media, onClick, settings, query ->
+                                        ArtistList(artists, media, onClick, settings, query)
+                                    },
+                                    AlbumList = { albums, media, onClick, settings, query ->
+                                        AlbumList(albums, media, onClick, settings, query)
+                                    },
+                                    FolderList = { folders, onClick, onIgnore, ignored, settings, query ->
+                                        FolderList(folders, onClick, onIgnore, ignored, settings, query)
+                                    },
+                                    PlaylistList = { playlists, onClick, onCreate, onDelete, onRename, onSetImage, songs, settings ->
+                                        PlaylistList(playlists, onClick, onCreate, onDelete, onRename, onSetImage, songs, settings)
+                                    },
+                                    MusicList = ::MusicList,
+                                    MetadataRow = ::MetadataRow,
+                                    EcualizadorPanel = ::EcualizadorPanel,
+                                    MorphingPlayPauseButton = { isPlaying, onClick, modifier, mainColor, iconColor, iconSize, borderWidth ->
+                                        MorphingPlayPauseButton(isPlaying, onClick, modifier, mainColor, iconColor, iconSize, borderWidth)
+                                    }
+                                )
 
-                            PlayerScreen(
-                                songs = viewModel.cancionesState.value,
-                                videos = viewModel.videosState.value,
-                                player = viewModel.mediaController,
-                                settings = settings,
-                                components = components,
-                                downloadViewModel = downloadViewModel,
-                                onRefreshLibrary = { viewModel.loadSongs() },
-                                onIgnoreFolder = { viewModel.toggleIgnoreFolder(it) },
-                                ignoredFolders = viewModel.ignoredFolders.filterNotNull().toSet()
-                            )
+                                PlayerScreen(
+                                    songs = viewModel.cancionesState.value,
+                                    videos = viewModel.videosState.value,
+                                    player = viewModel.mediaController,
+                                    settings = settings,
+                                    components = components,
+                                    downloadViewModel = downloadViewModel,
+                                    onRefreshLibrary = { viewModel.loadSongs() },
+                                    onIgnoreFolder = { viewModel.toggleIgnoreFolder(it) },
+                                    ignoredFolders = viewModel.ignoredFolders.filterNotNull().toSet()
+                                )
+                            }
                         }
                     }
                 }

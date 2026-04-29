@@ -112,8 +112,10 @@ fun LyricsView(
             // Cabecera tipo "Isla Dinámica" / Cápsula Morfológica (Sólida y Expresiva)
             Surface(
                 onClick = { showLyricsMenu = true },
-                color = Color(0xFF1E1E1E),
+                color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else Color(0xFF1E1E1E),
                 shape = RoundedCornerShape(32.dp),
+                tonalElevation = 0.dp,
+                shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 8.dp,
                 modifier = Modifier
                     .statusBarsPadding()
                     .align(Alignment.Start)
@@ -300,7 +302,9 @@ fun LyricsView(
                                 .weight(1f)
                                 .height(72.dp),
                             shape = RoundedCornerShape(32.dp),
-                            color = Color(0xFF1E1E1E)
+                            color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else Color(0xFF1E1E1E),
+                            tonalElevation = 0.dp,
+                            shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 4.dp
                         ) {
                             Box(
                                 modifier = Modifier
@@ -339,7 +343,9 @@ fun LyricsView(
                             onClick = onClose,
                             modifier = Modifier.size(56.dp),
                             shape = CircleShape,
-                            color = Color(0xFF1E1E1E)
+                            color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else Color(0xFF1E1E1E),
+                            tonalElevation = 0.dp,
+                            shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 4.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
@@ -353,7 +359,9 @@ fun LyricsView(
                                 .padding(horizontal = 12.dp)
                                 .height(56.dp),
                             shape = RoundedCornerShape(32.dp),
-                            color = Color(0xFF1E1E1E)
+                            color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else Color(0xFF1E1E1E),
+                            tonalElevation = 0.dp,
+                            shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 4.dp
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxSize().padding(4.dp),
@@ -403,7 +411,9 @@ fun LyricsView(
                             onClick = { showLyricsMenu = true },
                             modifier = Modifier.size(56.dp),
                             shape = CircleShape,
-                            color = Color(0xFF1E1E1E)
+                            color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else Color(0xFF1E1E1E),
+                            tonalElevation = 0.dp,
+                            shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 4.dp
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.MoreVert, null, tint = Color.White)
@@ -419,8 +429,9 @@ fun LyricsView(
         if (showLyricsMenu) {
             ModalBottomSheet(
                 onDismissRequest = { showLyricsMenu = false },
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.onSurface,
+                tonalElevation = 0.dp,
                 shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
                 dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.outline) }
             ) {

@@ -87,7 +87,10 @@ fun VideoPlayerView(
                 controller.hide(WindowInsetsCompat.Type.systemBars())
                 controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                // Volver a modo normal solo si estaba en full screen, evitando bugs al abrir/cerrar
+                if (activity.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                    activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -99,7 +102,10 @@ fun VideoPlayerView(
                 val controller = WindowInsetsControllerCompat(window, window.decorView)
                 controller.show(WindowInsetsCompat.Type.systemBars())
             }
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            // Solo restaurar si no estamos cerrando la app o algo similar que necesite SPECIFIED
+            if (activity?.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
         }
     }
 
@@ -308,7 +314,9 @@ fun VideoPlayerView(
                                     ) {
                                         // Botón para salir de pantalla completa
                                         IconButton(
-                                            onClick = { onToggleFullScreen(false) },
+                                            onClick = { 
+                                                onToggleFullScreen(false)
+                                            },
                                             modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                                         ) {
                                             Icon(Icons.Default.FullscreenExit, null, tint = Color.White, modifier = Modifier.size(32.dp))
@@ -316,7 +324,10 @@ fun VideoPlayerView(
 
                                         // Botón para cerrar reproductor
                                         IconButton(
-                                            onClick = onCloseVideo,
+                                            onClick = {
+                                                onToggleFullScreen(false)
+                                                onCloseVideo()
+                                            },
                                             modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
                                         ) {
                                             Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)

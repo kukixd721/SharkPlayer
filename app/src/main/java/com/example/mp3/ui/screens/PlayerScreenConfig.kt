@@ -86,7 +86,13 @@ data class PlayerSettings(
     val selectedCuratedPalette: Int,
     val onSelectedCuratedPaletteChange: (Int) -> Unit,
     val unifiedLyricsBackground: Boolean,
-    val onUnifiedLyricsBackgroundChange: (Boolean) -> Unit
+    val onUnifiedLyricsBackgroundChange: (Boolean) -> Unit,
+    val backgroundImageUri: String?,
+    val onBackgroundImageChange: (String?) -> Unit,
+    val backgroundAlpha: Float,
+    val onBackgroundAlphaChange: (Float) -> Unit,
+    val useImageDynamicColor: Boolean,
+    val onUseImageDynamicColorChange: (Boolean) -> Unit
 )
 
 data class MusicListConfig(
@@ -143,7 +149,7 @@ data class PlayerComponents(
     ) -> Unit,
     val MusicList: @Composable (songs: List<Song>, player: Player, isPlaying: Boolean, config: MusicListConfig) -> Unit,
     val MetadataRow: @Composable (ImageVector, String, String) -> Unit,
-    val EcualizadorPanel: @Composable () -> Unit,
+    val EcualizadorPanel: @Composable (onClose: () -> Unit) -> Unit,
     val MorphingPlayPauseButton: @Composable (
         isPlaying: Boolean,
         onClick: () -> Unit,

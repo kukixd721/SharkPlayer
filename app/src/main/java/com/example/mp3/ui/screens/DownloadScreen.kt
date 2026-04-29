@@ -174,6 +174,7 @@ fun DownloadScreen(
                                 DownloadItemCard(
                                     download = item,
                                     modifier = Modifier.padding(vertical = 4.dp),
+                                    settings = settings,
                                     onCancel = { viewModel.startDownload(context, item.url, strings, force = true) },
                                     onRemove = { itemToRemoveFromHistory = item }
                                 )
@@ -261,7 +262,8 @@ fun DownloadScreen(
                             name = "YT Music",
                             icon = Icons.Default.MusicNote,
                             color = Color(0xFFFF0000),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            settings = settings
                         ) {
                             webUrl = "https://music.youtube.com"
                             viewModel.selectedFormat = "mp3"
@@ -272,7 +274,8 @@ fun DownloadScreen(
                             name = "Spotify",
                             icon = Icons.Default.LibraryMusic,
                             color = Color(0xFF1DB954),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            settings = settings
                         ) {
                             webUrl = "https://open.spotify.com"
                             viewModel.selectedFormat = "mp3"
@@ -286,7 +289,8 @@ fun DownloadScreen(
                         name = "YouTube (Videos)",
                         icon = Icons.Default.PlayCircle,
                         color = Color(0xFFE53935),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        settings = settings
                     ) {
                         webUrl = "https://www.youtube.com"
                         viewModel.selectedFormat = "mp4"
@@ -382,7 +386,7 @@ fun DownloadScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.background)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -391,50 +395,78 @@ fun DownloadScreen(
         ) {
             // ... contenido de la lista (icono, titulo, input, etc)
             item {
-                Column(
+                ElevatedCard(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 16.dp, bottom = 40.dp),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = if (settings.backgroundImageUri != null) 
+                            MaterialTheme.colorScheme.surface.copy(alpha = settings.backgroundAlpha) 
+                        else MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    shape = RoundedCornerShape(settings.roundnessLarge.dp),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Surface(
-                            modifier = Modifier.size(170.dp).graphicsLayer { rotationZ = -10f },
-                            shape = RoundedCornerShape(48.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            tonalElevation = 2.dp
-                        ) {}
-                        Surface(
-                            modifier = Modifier.size(150.dp).graphicsLayer { rotationZ = 5f },
-                            shape = RoundedCornerShape(42.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            tonalElevation = 4.dp,
-                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.CloudDownload, 
-                                    null, 
-                                    modifier = Modifier.size(72.dp), 
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp, horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            // Círculo decorativo de fondo
+                            Surface(
+                                modifier = Modifier
+                                    .size(130.dp)
+                                    .graphicsLayer { rotationZ = -10f },
+                                shape = RoundedCornerShape(40.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                            ) {}
+                            
+                            // Contenedor del icono principal
+                            Surface(
+                                modifier = Modifier
+                                    .size(110.dp)
+                                    .graphicsLayer { rotationZ = 5f },
+                                shape = RoundedCornerShape(32.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f),
+                                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(54.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
+                        
+                        Spacer(modifier = Modifier.height(28.dp))
+                        
+                        Text(
+                            text = strings.downloadMusic,
+                            style = MaterialTheme.typography.displayLarge.copy(
+                                fontSize = 52.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = (-3).sp,
+                                lineHeight = 56.sp
+                            ),
+                            textAlign = TextAlign.Center
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = strings.downloadMusicDesc,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
                     }
-                    
-                    Spacer(modifier = Modifier.height(48.dp))
-                    
-                    Text(
-                        text = strings.downloadMusic, 
-                        style = MaterialTheme.typography.displayLarge.copy(
-                            fontSize = 62.sp,
-                            fontWeight = FontWeight.Black, 
-                            letterSpacing = (-4).sp,
-                            lineHeight = 56.sp
-                        ), 
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
                 }
             }
 
@@ -444,8 +476,8 @@ fun DownloadScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 12.dp),
                     shape = RoundedCornerShape(36.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 2.dp,
+                    color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 2.dp,
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Row(
@@ -515,8 +547,8 @@ fun DownloadScreen(
                             translationY = 60 * (1f - configurationVisible.value)
                         },
                     shape = RoundedCornerShape(36.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 3.dp,
+                    color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 3.dp,
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
@@ -586,7 +618,7 @@ fun DownloadScreen(
                             Surface(
                                 modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHighest,
                                 border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                             ) {
                                 Row(
@@ -615,9 +647,9 @@ fun DownloadScreen(
                                 modifier = Modifier
                                     .fillMaxWidth(0.85f),
                                 properties = PopupProperties(focusable = true),
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                tonalElevation = 3.dp,
-                                shadowElevation = 12.dp,
+                                containerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 3.dp,
+                                shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 12.dp,
                                 shape = RoundedCornerShape(28.dp),
                                 offset = DpOffset(0.dp, 8.dp)
                             ) {
@@ -661,7 +693,7 @@ fun DownloadScreen(
                                 Surface(
                                     modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                                     shape = RoundedCornerShape(24.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHighest,
                                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
@@ -676,9 +708,9 @@ fun DownloadScreen(
                                 DropdownMenu(
                                     expanded = formatExpanded,
                                     onDismissRequest = { formatExpanded = false },
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    tonalElevation = 3.dp,
-                                    shadowElevation = 12.dp,
+                                    containerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 3.dp,
+                                    shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 12.dp,
                                     shape = RoundedCornerShape(24.dp),
                                     offset = DpOffset(0.dp, 8.dp)
                                 ) {
@@ -705,7 +737,7 @@ fun DownloadScreen(
                                 Surface(
                                     modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
                                     shape = RoundedCornerShape(24.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHighest,
                                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
                                 ) {
                                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
@@ -721,9 +753,9 @@ fun DownloadScreen(
                                 DropdownMenu(
                                     expanded = qualityExpanded,
                                     onDismissRequest = { qualityExpanded = false },
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    tonalElevation = 3.dp,
-                                    shadowElevation = 12.dp,
+                                    containerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 3.dp,
+                                    shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 12.dp,
                                     shape = RoundedCornerShape(24.dp),
                                     offset = DpOffset(0.dp, 8.dp)
                                 ) {
@@ -783,6 +815,7 @@ fun DownloadScreen(
                     DownloadItemCard(
                         download = download, 
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        settings = settings,
                         onCancel = { 
                             if (download.isError) {
                                 viewModel.cancelDownload(download.id)
@@ -801,13 +834,13 @@ fun DownloadScreen(
 
 
 @Composable
-fun SourceItem(name: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun SourceItem(name: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier, settings: PlayerSettings, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         modifier = modifier.height(110.dp),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        tonalElevation = 2.dp
+        color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 2.dp
     ) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(icon, null, tint = color, modifier = Modifier.size(32.dp))
@@ -821,6 +854,7 @@ fun SourceItem(name: String, icon: ImageVector, color: Color, modifier: Modifier
 fun DownloadItemCard(
     download: DownloadInfo, 
     modifier: Modifier = Modifier,
+    settings: PlayerSettings,
     onCancel: () -> Unit,
     onRemove: (() -> Unit)? = null
 ) {
@@ -832,8 +866,8 @@ fun DownloadItemCard(
     Surface(
         modifier = modifier.fillMaxWidth(), 
         shape = RoundedCornerShape(32.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        tonalElevation = 6.dp,
+        color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHighest,
+        tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 6.dp,
         border = BorderStroke(2.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.padding(24.dp)) {

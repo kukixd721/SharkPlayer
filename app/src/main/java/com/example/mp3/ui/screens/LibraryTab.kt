@@ -2,7 +2,7 @@ package com.example.mp3.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -19,9 +19,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -34,6 +36,30 @@ import com.example.mp3.ui.components.CompactAlbumCard
 import com.example.mp3.ui.components.VideoList
 import java.io.File
 import android.widget.Toast
+
+@Composable
+fun ToolbarActionIconButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(48.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +124,12 @@ fun LibraryTab(
         ) {
             tabs.forEachIndexed { index, title ->
                 val isSelected = selectedMusicTab == index
+                val cornerRadius by animateDpAsState(
+                    targetValue = if (isSelected) 24.dp else 12.dp,
+                    animationSpec = spring(stiffness = Spring.StiffnessLow),
+                    label = "tabCorner"
+                )
+                
                 Tab(
                     selected = isSelected,
                     onClick = {
@@ -108,24 +140,27 @@ fun LibraryTab(
                         onBrowsingFolderChange(null)
                     },
                     modifier = Modifier
-                        .padding(vertical = 8.dp, horizontal = 4.dp)
-                        .height(40.dp)
-                        .clip(CircleShape)
-                        .border(
-                            width = 2.dp,
-                            color = if (isSelected) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                            shape = CircleShape
-                        )
+                        .padding(vertical = 12.dp, horizontal = 4.dp)
+                        .height(48.dp)
+                        .clip(RoundedCornerShape(cornerRadius))
                         .background(
                             if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                        .then(
+                            if (isSelected) Modifier.border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(cornerRadius)
+                            ) else Modifier
                         ),
                     text = {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                letterSpacing = 0.2.sp
+                            ),
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -139,7 +174,7 @@ fun LibraryTab(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
@@ -152,73 +187,65 @@ fun LibraryTab(
                         player?.prepare()
                         player?.play()
                     },
-                    shape = CircleShape,
+                    shape = RoundedCornerShape(24.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                 ) {
                     Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Shuffle", fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Shuffle", 
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
                 }
 
                 Spacer(Modifier.weight(1f))
 
-                IconButton(
+                ToolbarActionIconButton(
                     onClick = { settings.onUseGridViewLibraryChange(!settings.useGridViewLibrary) },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Icon(
-                        if (settings.useGridViewLibrary) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                        null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                    icon = if (settings.useGridViewLibrary) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView
+                )
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(12.dp))
 
-                IconButton(
+                ToolbarActionIconButton(
                     onClick = { onCurrentTabChange(1) },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                    icon = Icons.Default.Search
+                )
 
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(12.dp))
 
                 var showSortMenu by remember { mutableStateOf(false) }
                 Box {
-                    IconButton(
+                    ToolbarActionIconButton(
                         onClick = { showSortMenu = true },
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Sort, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                        icon = Icons.AutoMirrored.Filled.Sort
+                    )
+                    
                     DropdownMenu(
                         expanded = showSortMenu,
                         onDismissRequest = { showSortMenu = false },
-                        modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clip(RoundedCornerShape(16.dp))
                     ) {
                         DropdownMenuItem(
-                            text = { Text(strings.recentlyAdded) },
+                            text = { Text(strings.recentlyAdded, fontWeight = FontWeight.Bold) },
                             onClick = { onSortOrderChange(0); showSortMenu = false },
                             leadingIcon = { Icon(Icons.Default.Schedule, null) }
                         )
                         DropdownMenuItem(
-                            text = { Text("A-Z") },
+                            text = { Text("A-Z", fontWeight = FontWeight.Bold) },
                             onClick = { onSortOrderChange(1); showSortMenu = false },
                             leadingIcon = { Icon(Icons.Default.SortByAlpha, null) }
                         )
                         DropdownMenuItem(
-                            text = { Text(strings.favorites) },
+                            text = { Text(strings.favorites, fontWeight = FontWeight.Bold) },
                             onClick = { onSortOrderChange(2); showSortMenu = false },
                             leadingIcon = { Icon(Icons.Default.Favorite, null) }
                         )

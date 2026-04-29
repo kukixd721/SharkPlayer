@@ -421,12 +421,12 @@ fun FullPlayerSheet(
                                             )
                                         },
                                     shape = RoundedCornerShape(
-                                        32.dp
+                                        albumCornerRadius
                                     ),
                                     shadowElevation = 0.dp,
                                     border = BorderStroke(
                                         2.dp,
-                                        MaterialTheme.colorScheme.outline
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     )
                                 ) {
                                     AsyncImage(
@@ -459,7 +459,7 @@ fun FullPlayerSheet(
                                         text = currentMedia?.mediaMetadata?.title?.toString()
                                             ?: strings.noSongs,
                                         style = MaterialTheme.typography.headlineMedium.copy(
-                                            fontWeight = FontWeight.Black,
+                                            fontWeight = FontWeight.ExtraBold,
                                             letterSpacing = (-1).sp,
                                             fontSize = 28.sp,
                                             lineHeight = 34.sp
@@ -759,10 +759,10 @@ fun FullPlayerSheet(
                                             components.MorphingPlayPauseButton(
                                                 isPlaying,
                                                 { if (isPlaying) player.pause() else player.play() },
-                                                Modifier.requiredSize(88.dp),
+                                                Modifier.requiredSize(92.dp),
                                                 MaterialTheme.colorScheme.primary,
                                                 MaterialTheme.colorScheme.onPrimary,
-                                                42.dp,
+                                                48.dp,
                                                 2.dp
                                             )
 
@@ -797,10 +797,10 @@ fun FullPlayerSheet(
                                             modifier = Modifier.height(56.dp)
                                                 .width(140.dp),
                                             color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            shape = RoundedCornerShape(28.dp),
+                                            shape = RoundedCornerShape(20.dp),
                                             border = BorderStroke(
                                                 2.dp,
-                                                MaterialTheme.colorScheme.outline
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                                             )
                                         ) {
                                             Row(
@@ -1133,14 +1133,15 @@ fun FullPlayerSheet(
                     }
 
                     if (showEqualizerDialog) {
-                        ModalBottomSheet(
+                        androidx.compose.ui.window.Dialog(
                             onDismissRequest = { onShowEqualizerDialogChange(false) },
-                            sheetState = rememberModalBottomSheetState(
-                                skipPartiallyExpanded = true
-                            ),
-                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                            properties = androidx.compose.ui.window.DialogProperties(
+                                usePlatformDefaultWidth = false
+                            )
                         ) {
-                            components.EcualizadorPanel()
+                            Surface(modifier = Modifier.fillMaxSize()) {
+                                components.EcualizadorPanel { onShowEqualizerDialogChange(false) }
+                            }
                         }
                     }
                 }

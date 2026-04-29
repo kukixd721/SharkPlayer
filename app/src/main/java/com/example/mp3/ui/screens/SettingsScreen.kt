@@ -2,6 +2,8 @@ package com.example.mp3.ui.screens
 
 import android.media.audiofx.BassBoost
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -175,10 +177,18 @@ fun SettingsScreen(
     }
 
     // --- DIÁLOGOS ---
-    if (showEqPanel) ModalBottomSheet(
-        onDismissRequest = { showEqPanel = false },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    ) { components.EcualizadorPanel(); Spacer(Modifier.height(48.dp)) }
+    if (showEqPanel) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showEqPanel = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                components.EcualizadorPanel { showEqPanel = false }
+            }
+        }
+    }
     if (showSleepTimerDialog) {
         AlertDialog(
             onDismissRequest = { showSleepTimerDialog = false },
@@ -286,7 +296,19 @@ fun SettingsScreen(
 
 @Composable
 fun AppearanceSection(strings: com.example.mp3.AppStrings, settings: PlayerSettings, onLang: () -> Unit, onFont: () -> Unit, onColorStyle: () -> Unit) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: Exception) {}
+            settings.onBackgroundImageChange(it.toString())
+        }
+    }
+
     var showVisuals by remember { mutableStateOf(false) }
+    var showBackgroundOptions by remember { mutableStateOf(false) }
+
     SettingsActionCard(Icons.Default.Translate, strings.language, settings.selectedLanguage.label, onLang)
     SettingsActionCard(when(settings.themeMode){1->Icons.Default.LightMode; 2->Icons.Default.DarkMode; else->Icons.Default.SettingsSuggest}, strings.themeMode, when(settings.themeMode){1->strings.themeLight; 2->strings.themeDark; else->strings.themeSystem}, { settings.onThemeModeChange((settings.themeMode+1)%3) })
     
@@ -299,6 +321,54 @@ fun AppearanceSection(strings: com.example.mp3.AppStrings, settings: PlayerSetti
             settings.useOledMode,
             settings.onUseOledModeChange
         )
+    }
+
+    // Fondo Personalizado
+    SettingsActionCard(
+        icon = Icons.Default.Image,
+        title = strings.customBackground,
+        subtitle = if (settings.backgroundImageUri != null) strings.customizeTheme else strings.customBackgroundDesc,
+        onClick = { showBackgroundOptions = !showBackgroundOptions }
+    )
+
+    AnimatedVisibility(showBackgroundOptions) {
+        Column(Modifier.padding(start = 16.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(0.2f), RoundedCornerShape(16.dp)).padding(16.dp)) {
+            SettingsActionCard(
+                icon = Icons.Default.AddPhotoAlternate,
+                title = strings.selectImage,
+                subtitle = settings.backgroundImageUri ?: "",
+                onClick = { launcher.launch("image/*") },
+                withSurface = false
+            )
+            
+            if (settings.backgroundImageUri != null) {
+                SettingsActionCard(
+                    icon = Icons.Default.Delete,
+                    title = strings.removeImage,
+                    subtitle = "",
+                    onClick = { settings.onBackgroundImageChange(null) },
+                    withSurface = false
+                )
+                
+                AdjustmentItem(
+                    label = strings.backgroundOpacity,
+                    value = settings.backgroundAlpha * 100f,
+                    onValueChange = { settings.onBackgroundAlphaChange(it / 100f) },
+                    range = 0f..100f,
+                    unit = "%"
+                )
+                
+                SettingsSwitchCard(
+                    icon = Icons.Default.Palette,
+                    title = strings.dynamicColor,
+                    subtitle = strings.dynamicColorDesc,
+                    isChecked = settings.useImageDynamicColor,
+                    onCheckedChange = settings.onUseImageDynamicColorChange,
+                    withSurface = false,
+                    compact = true
+                )
+            }
+        }
     }
 
     // Nuevo Botón Profesional para Estilo de Color

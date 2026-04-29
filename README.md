@@ -81,4 +81,4 @@ This app is intended for personal use and management of local music libraries. T
 ## 🤝 Support & Contribution
 Found a bug or have a suggestion? Open an [issue](https://github.com/kukoso721/shark-player/issues) or submit a PR.
 
-Developed with ❤️ and too much caffeine by **kukoso721** 🚬
+Developed by **kukoso721** 🚬

@@ -40,8 +40,8 @@ fun MorphingPlayPauseButton(
 ) {
     // Morphing shape animation
     val cornerAnim by animateIntAsState(
-        targetValue = if (isPlaying) 50 else 38, // 50% = Circle, 38% = Very Rounded Square
-        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioMediumBouncy),
+        targetValue = if (isPlaying) 50 else 32, // 50% = Circle, 32% = Rounded Square (Material Expressive)
+        animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioLowBouncy),
         label = "cornerMorph"
     )
 

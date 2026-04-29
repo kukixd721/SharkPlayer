@@ -30,6 +30,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.mp3.LocalStrings
 import com.example.mp3.Song
+import com.example.mp3.ui.screens.PlayerSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -44,6 +45,7 @@ fun ControlBar(
     isShuffleOn: Boolean,
     repeatMode: Int,
     songList: List<Song>,
+    settings: PlayerSettings,
     onTitleClick: () -> Unit,
     onCollapse: () -> Unit,
     getAlbumArt: (String) -> ByteArray?,
@@ -66,16 +68,25 @@ fun ControlBar(
     val secondaryColor = MaterialTheme.colorScheme.secondary
     val tertiaryColor = MaterialTheme.colorScheme.tertiary
 
+    val containerCornerRadius by animateDpAsState(
+        targetValue = if (isPlaying) 44.dp else 24.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "ControlBarCornerRadius"
+    )
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(115.dp)
             .padding(horizontal = 10.dp, vertical = 6.dp)
             .clickable { onTitleClick() },
-        shape = RoundedCornerShape(32.dp),
-        color = surfaceColor,
+        shape = RoundedCornerShape(containerCornerRadius),
+        color = if (settings.backgroundImageUri != null) surfaceColor.copy(alpha = settings.backgroundAlpha) else surfaceColor,
         tonalElevation = 0.dp,
-        shadowElevation = 8.dp
+        shadowElevation = if (settings.backgroundImageUri != null) 0.dp else 8.dp
     ) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -142,7 +153,7 @@ fun ControlBar(
                     Text(
                         text = currentMedia?.mediaMetadata?.title?.toString() ?: strings.sharkPlayer,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp), // Reducido de 16.sp
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = onSurfaceColor,
                         maxLines = 1,
                         modifier = Modifier.basicMarquee()
@@ -150,6 +161,7 @@ fun ControlBar(
                     Text(
                         text = currentMedia?.mediaMetadata?.artist?.toString() ?: strings.unknownArtist,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp), // Reducido de 12.sp
+                        fontWeight = FontWeight.Bold,
                         color = onSurfaceColor.copy(alpha = 0.7f),
                         maxLines = 1
                     )

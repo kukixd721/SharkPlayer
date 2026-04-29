@@ -47,6 +47,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.content.Intent
+import android.provider.Settings
 import com.example.mp3.*
 import com.example.mp3.ui.components.*
 import kotlinx.coroutines.Dispatchers
@@ -137,7 +139,7 @@ fun PlayerScreen(
         val albumCornerRadius by animateDpAsState(
             targetValue = if (isPlaying) 48.dp else 24.dp,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
+                dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             ),
             label = "AlbumCorners"
@@ -317,7 +319,7 @@ fun PlayerScreen(
         val albumScale by animateFloatAsState(
             targetValue = if (isPlaying) 1f else 0.85f,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
+                dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow
             ),
             label = "AlbumScale"
@@ -944,7 +946,7 @@ fun PlayerScreen(
 
         // --- MAIN APP UI ---
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.surface,
             snackbarHost = {
                 SnackbarHost(hostState = globalSnackbarHostState) { data ->
                     Card(
@@ -987,7 +989,7 @@ fun PlayerScreen(
                             Text(
                                 text = when (currentTab) {
                                     0 -> strings.home
-                                    1 -> strings.searchSongs
+                                    1 -> strings.search
                                     2 -> "Library"
                                     3 -> "Downloads"
                                     else -> strings.settings
@@ -1002,6 +1004,26 @@ fun PlayerScreen(
                         navigationIcon = {
                         },
                         actions = {
+                            Surface(
+                                onClick = {
+                                    context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                                },
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(40.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.Bluetooth,
+                                        contentDescription = strings.connectBluetooth,
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
                             IconButton(onClick = {
                                 currentTab = 4
                                 browsingGenre = null
@@ -1018,7 +1040,10 @@ fun PlayerScreen(
             },
             bottomBar = {
                 if (currentTab != 4) {
-                    NavigationBar {
+                    NavigationBar(
+                        containerColor = if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.surface,
+                        tonalElevation = if (settings.backgroundImageUri != null) 0.dp else 3.dp
+                    ) {
                         NavigationBarItem(
                             selected = currentTab == 0,
                             onClick = {
@@ -1048,13 +1073,13 @@ fun PlayerScreen(
                             icon = {
                                 Icon(
                                     Icons.Default.Search,
-                                    contentDescription = strings.searchSongs,
+                                    contentDescription = strings.search,
                                     modifier = Modifier.size(30.dp)
                                 )
                             },
                             label = {
                                 Text(
-                                    strings.searchSongs,
+                                    strings.search,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -1122,7 +1147,7 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
+                    .background(if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.background)
             ) {
                 // 1. El contenido de las pestañas (Home, Search, etc.)
                 Box(
@@ -1177,8 +1202,9 @@ fun PlayerScreen(
                             ) { page ->
                                 when (page) {
                                     0 -> {
+                                        val homeSongList = remember(songs) { songs }
                                         HomeScreen(
-                                            songList = songList,
+                                            songList = homeSongList,
                                             player = player,
                                             favoriteIds = favoriteIds,
                                             onToggleFavoriteId = toggleFavorite,
@@ -1208,6 +1234,10 @@ fun PlayerScreen(
                                                 showMenu = false
                                                 Unit
                                             },
+                                            onDownloadClick = {
+                                                currentTab = 3
+                                                browsingGenre = null
+                                            },
                                             settings = settings,
                                             getAlbumArt = { settings.getAlbumArt(it) }
                                         )
@@ -1233,8 +1263,8 @@ fun PlayerScreen(
                                                     .background(
                                                         Brush.verticalGradient(
                                                             listOf(
-                                                                MaterialTheme.colorScheme.surface,
-                                                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                                                if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                                                if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh
                                                             )
                                                         )
                                                     )
@@ -1551,6 +1581,7 @@ fun PlayerScreen(
                             isShuffleOn = isShuffleOn,
                             repeatMode = repeatMode,
                             songList = songList,
+                            settings = settings,
                             onTitleClick = {
                                 if (isVideoPlaying) {
                                     isVideoFullScreen = true
@@ -1635,7 +1666,7 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surface)
+                            .background(if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.surface)
                     ) {
                         if (settings.unifiedLyricsBackground) {
                             AnimatedMeshGradient(

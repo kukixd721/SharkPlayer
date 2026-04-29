@@ -48,6 +48,7 @@ interface AppStrings {
     val albums: String
     val favorites: String
     val videos: String
+    val connectBluetooth: String
     val appearance: String
     val appearanceDesc: String
     val playback: String
@@ -78,6 +79,8 @@ interface AppStrings {
     val yourPersonalAnthem: String
     val mostPlayed: String
     val musicInNumbers: String
+    val topCategories: String
+    val compareListening: String
     val totalTime: String
     val artistsInCollection: String
     val songs: String
@@ -98,6 +101,7 @@ interface AppStrings {
     val superBass: String
     val year: String
     val genre: String
+    val lyrics: String
     val track: String
     val searchingAudio: String
     val analyzingMetadata: String
@@ -219,8 +223,6 @@ interface AppStrings {
     val autoLyricsDesc: String
     val editTags: String
     val title: String
-    val artist: String
-    val album: String
     val trackNumber: String
     val tagsUpdated: String
     val errorUpdatingTags: String
@@ -270,10 +272,47 @@ interface AppStrings {
     val info: String
     val playlist: String
     val song: String
+    val album: String
+    val artist: String
     val dynamicsProcessing: String
     val gain: String
     val limit: String
+    val virtualizer: String
+    val loudness: String
+    val custom: String
+    val saveProfile: String
     val deletePhysicalFile: String
+    val topArtists: String
+    val topGenres: String
+    val listeningHabits: String
+    val totalSessions: String
+    val avgSession: String
+    val longestSession: String
+    val sessionsPerDay: String
+    val generalStats: String
+    val totalPlays: String
+    val totalSkips: String
+    val listeningStats: String
+    val today: String
+    val thisWeek: String
+    val thisMonth: String
+    val thisYear: String
+    val allTime: String
+    val listening: String
+    val listeningTimeline: String
+    val listeningTimelineDesc: String
+    val noDataYet: String
+    val noDataDesc: String
+    val noTopTracks: String
+    val noTopArtists: String
+    val noTopAlbums: String
+    val noTopGenres: String
+    val plays: String
+    val customBackground: String
+    val customBackgroundDesc: String
+    val backgroundOpacity: String
+    val selectImage: String
+    val removeImage: String
 }
 
 
@@ -320,6 +359,7 @@ object SpanishStrings : AppStrings {
     override val albums = "Álbumes"
     override val favorites = "Favoritos"
     override val videos = "Videos"
+    override val connectBluetooth = "Conectar Bluetooth"
     override val appearance = "Apariencia"
     override val appearanceDesc = "Temas, colores y personalización visual"
     override val playback = "Reproducción"
@@ -350,6 +390,8 @@ object SpanishStrings : AppStrings {
     override val yourPersonalAnthem = "Tu himno personal"
     override val mostPlayed = "Lo más escuchado"
     override val musicInNumbers = "Tu música en números"
+    override val topCategories = "Categorías principales"
+    override val compareListening = "Compara cómo escuchas entre géneros, artistas, álbumes y canciones."
     override val totalTime = "Tiempo total"
     override val artistsInCollection = "Artistas en tu colección"
     override val songs = "Canciones"
@@ -379,6 +421,7 @@ object SpanishStrings : AppStrings {
     override val superBass = "SuperBass"
     override val year = "Año"
     override val genre = "Género"
+    override val lyrics = "Letras"
     override val track = "Pista"
     override val searchingAudio = "Buscando archivos de audio..."
     override val analyzingMetadata = "Analizando letras y metadatos..."
@@ -500,8 +543,6 @@ object SpanishStrings : AppStrings {
     override val autoLyricsDesc = "Buscar automáticamente letras en LRCLIB si no se encuentran localmente"
     override val editTags = "Editar Etiquetas"
     override val title = "Título"
-    override val artist = "Artista"
-    override val album = "Álbum"
     override val trackNumber = "Número de Pista"
     override val tagsUpdated = "Etiquetas actualizadas"
     override val errorUpdatingTags = "Error al actualizar etiquetas"
@@ -557,10 +598,47 @@ object SpanishStrings : AppStrings {
     override val info = "Información"
     override val playlist = "Lista"
     override val song = "Canción"
+    override val album = "Álbum"
+    override val artist = "Artista"
     override val dynamicsProcessing = "Procesamiento Dinámico"
     override val gain = "Ganancia"
     override val limit = "Límite"
+    override val virtualizer = "Virtualizador"
+    override val loudness = "Loudness"
+    override val custom = "Personalizado"
+    override val saveProfile = "Guardar Perfil"
     override val deletePhysicalFile = "¿Eliminar archivo del dispositivo?"
+    override val topArtists = "Artistas principales"
+    override val topGenres = "Géneros favoritos"
+    override val listeningHabits = "Hábitos de escucha"
+    override val totalSessions = "Sesiones totales"
+    override val avgSession = "Sesión promedio"
+    override val longestSession = "Sesión más larga"
+    override val sessionsPerDay = "Sesiones/día"
+    override val generalStats = "Estadísticas generales"
+    override val totalPlays = "Reproducciones totales"
+    override val totalSkips = "Canciones saltadas"
+    override val listeningStats = "Estadísticas de Escucha"
+    override val today = "Hoy"
+    override val thisWeek = "Esta semana"
+    override val thisMonth = "Este mes"
+    override val thisYear = "Este año"
+    override val allTime = "Todo el tiempo"
+    override val listening = "Escuchando"
+    override val listeningTimeline = "Línea de tiempo"
+    override val listeningTimelineDesc = "Tiempo total de escucha capturado en el rango seleccionado."
+    override val noDataYet = "Sin datos de escucha"
+    override val noDataDesc = "Dale a play para empezar a construir tu cronología"
+    override val noTopTracks = "Sin canciones principales"
+    override val noTopArtists = "Sin artistas principales"
+    override val noTopAlbums = "Sin álbumes principales"
+    override val noTopGenres = "Sin géneros principales"
+    override val plays = "Reproducciones"
+    override val customBackground = "Imagen de Fondo"
+    override val customBackgroundDesc = "Usa una imagen personalizada como fondo de la aplicación"
+    override val backgroundOpacity = "Opacidad del Fondo"
+    override val selectImage = "Seleccionar Imagen"
+    override val removeImage = "Quitar Imagen"
 }
 
 object EnglishStrings : AppStrings {
@@ -606,6 +684,7 @@ object EnglishStrings : AppStrings {
     override val albums = "Albums"
     override val favorites = "Favorites"
     override val videos = "Videos"
+    override val connectBluetooth = "Connect Bluetooth"
     override val appearance = "Appearance"
     override val appearanceDesc = "Themes, colors, and visual customization"
     override val playback = "Playback"
@@ -636,6 +715,8 @@ object EnglishStrings : AppStrings {
     override val yourPersonalAnthem = "Your personal anthem"
     override val mostPlayed = "Most played"
     override val musicInNumbers = "Your music in numbers"
+    override val topCategories = "Top categories"
+    override val compareListening = "Compare how you listen across genres, artists, albums, and songs."
     override val totalTime = "Total time"
     override val artistsInCollection = "Artists in your collection"
     override val songs = "Songs"
@@ -665,6 +746,7 @@ object EnglishStrings : AppStrings {
     override val superBass = "Super Bass"
     override val year = "Year"
     override val genre = "Genre"
+    override val lyrics = "Lyrics"
     override val track = "Track"
     override val searchingAudio = "Searching for audio files..."
     override val analyzingMetadata = "Analyzing lyrics and metadata..."
@@ -786,8 +868,6 @@ object EnglishStrings : AppStrings {
     override val autoLyricsDesc = "Automatically search for lyrics on LRCLIB if not found locally"
     override val editTags = "Edit Tags"
     override val title = "Title"
-    override val artist = "Artist"
-    override val album = "Album"
     override val trackNumber = "Track Number"
     override val tagsUpdated = "Tags updated"
     override val errorUpdatingTags = "Error updating tags"
@@ -843,8 +923,45 @@ object EnglishStrings : AppStrings {
     override val info = "Info"
     override val playlist = "Playlist"
     override val song = "Song"
+    override val album = "Album"
+    override val artist = "Artist"
     override val dynamicsProcessing = "Dynamics Processing"
     override val gain = "Gain"
     override val limit = "Limit"
+    override val virtualizer = "Virtualizer"
+    override val loudness = "Loudness"
+    override val custom = "Custom"
+    override val saveProfile = "Save Profile"
     override val deletePhysicalFile = "Delete file from device?"
+    override val topArtists = "Top Artists"
+    override val topGenres = "Top Genres"
+    override val listeningHabits = "Listening habits"
+    override val totalSessions = "Total sessions"
+    override val avgSession = "Avg session"
+    override val longestSession = "Longest session"
+    override val sessionsPerDay = "Sessions/day"
+    override val generalStats = "General stats"
+    override val totalPlays = "Total Plays"
+    override val totalSkips = "Total Skips"
+    override val listeningStats = "Listening Stats"
+    override val today = "Today"
+    override val thisWeek = "This Week"
+    override val thisMonth = "This Month"
+    override val thisYear = "This Year"
+    override val allTime = "All Time"
+    override val listening = "Listening"
+    override val listeningTimeline = "Listening timeline"
+    override val listeningTimelineDesc = "Total listening captured in the selected range."
+    override val noDataYet = "No listening data yet"
+    override val noDataDesc = "Press play to start building your timeline"
+    override val noTopTracks = "No top tracks"
+    override val noTopArtists = "No top artists"
+    override val noTopAlbums = "No top albums"
+    override val noTopGenres = "No top genres"
+    override val plays = "Plays"
+    override val customBackground = "Custom Background"
+    override val customBackgroundDesc = "Use a custom image as the application background"
+    override val backgroundOpacity = "Background Opacity"
+    override val selectImage = "Select Image"
+    override val removeImage = "Remove Image"
 }

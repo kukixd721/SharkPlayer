@@ -90,6 +90,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     
     var unifiedLyricsBackground by mutableStateOf(appPrefs.getBoolean("unified_lyrics_background", true))
     
+    // --- NUEVO: FONDO PERSONALIZADO ---
+    var backgroundImageUri by mutableStateOf(appPrefs.getString("background_image_uri", null))
+    var backgroundAlpha by mutableFloatStateOf(appPrefs.getFloat("background_alpha", 0.4f))
+    var useImageDynamicColor by mutableStateOf(appPrefs.getBoolean("use_image_dynamic_color", false))
+    
     // Colores extraídos de la carátula actual
     var artPrimaryColor by mutableIntStateOf(appPrefs.getInt("art_primary_color", android.graphics.Color.BLUE))
     var artSecondaryColor by mutableIntStateOf(appPrefs.getInt("art_secondary_color", android.graphics.Color.GRAY))
@@ -484,8 +489,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateUseOledMode(enabled: Boolean) {
         useOledMode = enabled
-        appPrefs.edit { putBoolean("use_oled_mode", enabled) }
-    }
+        appPrefs.edit { putBoolean("use_oled_mode", enabled) }    }
 
     fun updateSelectedCuratedPalette(index: Int) {
         selectedCuratedPalette = index
@@ -494,6 +498,56 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         // para que se note el cambio de "tema" elegido.
         if (useArtDynamicColor) {
             updateUseArtDynamicColor(false)
+        }
+    }
+
+    fun updateBackgroundImage(uri: String?) {
+        backgroundImageUri = uri
+        appPrefs.edit { putString("background_image_uri", uri) }
+        if (uri != null && useImageDynamicColor) {
+            extractColorsFromImage(uri)
+        }
+    }
+
+    fun updateBackgroundAlpha(alpha: Float) {
+        backgroundAlpha = alpha
+        appPrefs.edit { putFloat("background_alpha", alpha) }
+    }
+
+    fun updateUseImageDynamicColor(enabled: Boolean) {
+        useImageDynamicColor = enabled
+        appPrefs.edit { putBoolean("use_image_dynamic_color", enabled) }
+        if (enabled && backgroundImageUri != null) {
+            extractColorsFromImage(backgroundImageUri!!)
+        } else if (!enabled && !useArtDynamicColor) {
+            // Volver a colores por defecto o sistema si se desactiva
+            viewModelScope.launch {
+                updateColors(customAccentColor, customSecondaryColor, customTertiaryColor)
+            }
+        }
+    }
+
+    private fun extractColorsFromImage(uriString: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val uri = Uri.parse(uriString)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val bitmap = BitmapFactory.decodeStream(input)
+                    if (bitmap != null) {
+                        val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(bitmap, 150, 150, false)
+                        val palette = Palette.from(scaledBitmap).maximumColorCount(32).generate()
+                        
+                        val primarySwatch = palette.vibrantSwatch ?: palette.mutedSwatch ?: palette.dominantSwatch
+                        val primary = primarySwatch?.rgb ?: customAccentColor
+                        val secondary = (palette.lightVibrantSwatch ?: palette.lightMutedSwatch ?: primarySwatch)?.rgb ?: primary
+                        val tertiary = (palette.darkVibrantSwatch ?: palette.darkMutedSwatch ?: palette.mutedSwatch)?.rgb ?: secondary
+                        
+                        updateColors(primary, secondary, tertiary)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

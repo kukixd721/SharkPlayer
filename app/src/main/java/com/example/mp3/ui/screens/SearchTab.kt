@@ -37,6 +37,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.sp
+import kotlin.math.absoluteValue
 import androidx.core.net.toUri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -215,8 +218,8 @@ fun SearchTab(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                MaterialTheme.colorScheme.surface,
-                                MaterialTheme.colorScheme.surfaceContainerHigh
+                                if (settings.backgroundImageUri != null) Color.Transparent else MaterialTheme.colorScheme.surface,
+                                if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh
                             )
                         )
                     )
@@ -270,7 +273,7 @@ fun SearchTab(
                         // ... (el resto del renderizado de artistas y álbumes se mantiene igual)
                         item {
                             Surface(
-                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                color = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
                                 shape = RoundedCornerShape(settings.roundnessLarge.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -409,21 +412,41 @@ fun SearchTab(
             }
         }
     } else {
-        // GÉNEROS CON ESTILO Y EMOJIS
-        val genres = listOf(
-            Triple("Rock", Color(0xFFE91E63), "🎸"),
-            Triple("Pop", Color(0xFF9C27B0), "🎤"),
-            Triple("Hip Hop", Color(0xFF673AB7), "🎧"),
-            Triple("Jazz", Color(0xFF3F51B5), "🎷"),
-            Triple("Classical", Color(0xFF2196F3), "🎻"),
-            Triple("Electronic", Color(0xFF00BCD4), "🎹"),
-            Triple("Reggae", Color(0xFF009688), "🍃"),
-            Triple("Country", Color(0xFF4CAF50), "🤠"),
-            Triple("Blues", Color(0xFF8BC34A), "🎷"),
-            Triple("Metal", Color(0xFFCDDC39), "🤘"),
-            Triple("Folk", Color(0xFFFFEB3B), "🪕"),
-            Triple("Punk", Color(0xFFFFC107), "⚡")
-        )
+            // GÉNEROS DINÁMICOS EXTRAÍDOS DE LA BIBLIOTECA
+            val dynamicGenres = remember(songList) {
+                songList.mapNotNull { it.genre }
+                    .flatMap { it.split(",") }
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() && it.lowercase() != "unknown" }
+                    .distinct()
+                    .map { genre ->
+                        val emoji = when {
+                            genre.contains("rock", true) -> "🎸"
+                            genre.contains("pop", true) -> "🎤"
+                            genre.contains("hip hop", true) || genre.contains("rap", true) -> "🎧"
+                            genre.contains("jazz", true) -> "🎷"
+                            genre.contains("classical", true) -> "🎻"
+                            genre.contains("electronic", true) || genre.contains("techno", true) || genre.contains("dance", true) -> "🎹"
+                            genre.contains("reggeaton", true) || genre.contains("trap", true) || genre.contains("urbano", true) -> "🔥"
+                            genre.contains("reggae", true) -> "🍃"
+                            genre.contains("country", true) -> "🤠"
+                            genre.contains("blues", true) -> "🎷"
+                            genre.contains("metal", true) -> "🤘"
+                            genre.contains("folk", true) -> "🪕"
+                            genre.contains("punk", true) -> "⚡"
+                            genre.contains("k-pop", true) -> "✨"
+                            genre.contains("lofi", true) -> "☕"
+                            genre.contains("soundtrack", true) || genre.contains("anime", true) -> "🎬"
+                            else -> "🎵"
+                        }
+                        
+                        val hash = genre.hashCode().absoluteValue
+                        val hue = (hash % 360).toFloat()
+                        val color = Color.hsv(hue, 0.6f, 0.7f)
+                        
+                        Triple(genre, color, emoji)
+                    }
+            }
         Column(modifier = Modifier.fillMaxSize()) {
             OutlinedTextField(
                 value = searchQuery,
@@ -431,7 +454,7 @@ fun SearchTab(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(strings.search, style = MaterialTheme.typography.bodyLarge) },
+                placeholder = { Text("Buscar", style = MaterialTheme.typography.bodyLarge) },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.primary) },
                 trailingIcon = if (searchQuery.isNotEmpty()) {
                     {
@@ -443,8 +466,8 @@ fun SearchTab(
                 shape = RoundedCornerShape(24.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    focusedContainerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    unfocusedContainerColor = if (settings.backgroundImageUri != null) MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = settings.backgroundAlpha) else MaterialTheme.colorScheme.surfaceContainerHigh,
                     focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
                     unfocusedBorderColor = Color.Transparent,
                 )
@@ -532,7 +555,7 @@ fun SearchTab(
                             modifier = Modifier.padding(bottom = 8.dp, start = 4.dp)
                         )
                     }
-                    items(genres) { (genre, color, emoji) ->
+                    items(dynamicGenres) { (genre, color, emoji) ->
                         GenreCard(
                             genre = genre,
                             color = color,
