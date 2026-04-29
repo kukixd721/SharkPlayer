@@ -27,7 +27,7 @@
 
 ### 📂 Library & Downloads
 - **Multi-Source Downloader**: 
-  - 🎥 **YouTube**: High-quality audio extraction powered by **yt-dlp**.
+  - 🎥 **YouTube**: Audio extraction powered by **yt-dlp**.
   - 🎵 **Spotify**: (has some bugs) Experimental support (beta) to sync and download your favorite tracks.
 - **Download Management**: New dedicated **Download History** and a comprehensive **Download Guide** for new users.
 - **Smart Organization**: Automatically categorizes your local library by Artists, Albums, Genres, and Folders.
