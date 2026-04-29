@@ -45,6 +45,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.mp3.*
 import com.example.mp3.ui.components.*
 import kotlinx.coroutines.Dispatchers
@@ -142,17 +144,107 @@ fun PlayerScreen(
         )
 
         var searchQuery by remember { mutableStateOf("") }
-        var isLyricsFullScreen by remember { mutableStateOf(false) }
-        var isSheetOpen by remember { mutableStateOf(false) }
+        var isLyricsFullScreen by rememberSaveable { mutableStateOf(false) }
+        var isSheetOpen by rememberSaveable { mutableStateOf(false) }
+        var isVideoFullScreen by rememberSaveable { mutableStateOf(false) }
+
+        // --- ESTADOS DE VIDEO Y METADATOS (Hoisted) ---
+        var playbackSpeed by remember { mutableFloatStateOf(1f) }
+        val isVideoByMetadata =
+            player.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO
+        var forceCloseVideo by remember { mutableStateOf(false) }
+
+        // RESET de estados al cambiar de canción para evitar que desaparezca o se quede en pantalla completa
+        LaunchedEffect(currentMediaId) {
+            forceCloseVideo = false
+            isVideoFullScreen = false // Evita que el siguiente video empiece en pantalla completa
+        }
+
+        val showVideoPlayer = (isVideoPlaying || isVideoByMetadata)
+
+        fun findActivity(context: Context): Activity? {
+            var ctx = context
+            while (ctx is ContextWrapper) {
+                if (ctx is Activity) return ctx
+                ctx = ctx.baseContext
+            }
+            return null
+        }
+        val activity = remember(context) { findActivity(context) }
+
+        val effectiveVideo = remember(currentMediaId, isVideoByMetadata) {
+            currentVideo ?: if (isVideoByMetadata) {
+                val title = player.currentMediaItem?.mediaMetadata?.title?.toString()
+                videos.find { it.title == title }
+            } else null
+        }
+
+        LaunchedEffect(playbackSpeed) {
+            player.setPlaybackSpeed(playbackSpeed)
+        }
+
+        // Estados para overlays de brillo y volumen
+        var showBrightnessOverlay by remember { mutableStateOf(false) }
+        var brightnessLevel by remember { mutableIntStateOf(0) }
+        var showVolumeOverlay by remember { mutableStateOf(false) }
+        var volumeLevel by remember { mutableIntStateOf(0) }
+
+        var showDetailedInfo by remember { mutableStateOf(false) }
+
+        val effectiveMedia = currentSong ?: effectiveVideo
+        val songDetails by produceState<SongDetails>(SongDetails(), effectiveMedia) {
+            value = withContext(Dispatchers.IO) {
+                val media = effectiveMedia
+                val data = when (media) {
+                    is Song -> media.data
+                    is Video -> media.data
+                    else -> ""
+                }
+                if (data.isBlank()) return@withContext SongDetails()
+
+                var details = getAudioMetadata(context, data)
+                if (media is Song && details.lyrics.isNullOrBlank() && settings.autoLyrics) {
+                    // Intentar buscar en LRCLIB si el usuario tiene activada la búsqueda automática
+                    try {
+                        val cleanTitle =
+                            media.title.replace(
+                                Regex("(?i)\\(.*?\\)|\\[.*?\\]"),
+                                ""
+                            ).trim()
+                        val artist = if (media.artist != "<unknown>") media.artist else ""
+                        val queryUrl = "https://lrclib.net/api/search?artist_name=${java.net.URLEncoder.encode(artist, "UTF-8")}&track_name=${java.net.URLEncoder.encode(cleanTitle, "UTF-8")}"
+                        val response = java.net.URL(queryUrl).readText()
+                        val jsonArray = org.json.JSONArray(response)
+                        if (jsonArray.length() > 0) {
+                            val item = jsonArray.getJSONObject(0)
+                            val bestLyrics = item.optString("syncedLyrics", "").ifEmpty { item.optString("plainLyrics", "") }
+                            details = details.copy(
+                                lyrics = bestLyrics,
+                                lyricsSource = "online"
+                            )
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                details
+            }
+        }
+
+        var lyrics by remember(effectiveMedia, songDetails.lyrics) {
+            mutableStateOf((effectiveMedia as? Song)?.lyrics ?: songDetails.lyrics)
+        }
+        var isEditingLyrics by rememberSaveable { mutableStateOf(false) }
+        var selectedLyricLines by rememberSaveable { mutableStateOf(setOf<Int>()) }
+        var isSelectionMode by rememberSaveable { mutableStateOf(false) }
+        var editedLyricsText by rememberSaveable { mutableStateOf("") }
+        // ----------------------------------------------
+
         val sheetState = rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
             confirmValueChange = { newValue ->
-                if (isLyricsFullScreen && newValue == SheetValue.Hidden) {
-                    isLyricsFullScreen = false
-                    false // EVITA que la hoja se cierre si estamos en modo letras
-                } else {
-                    true // Permite cerrar si estamos en modo carátula
-                }
+                // Bloqueamos el cierre de la hoja si las letras están en pantalla completa
+                if (isLyricsFullScreen && newValue == SheetValue.Hidden) false else true
             }
         )
         var showQueueDialog by remember { mutableStateOf(false) }
@@ -200,7 +292,6 @@ fun PlayerScreen(
 
         var isPlayerVisible by remember { mutableStateOf(true) }
         var videoResizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
-        var isVideoFullScreen by rememberSaveable { mutableStateOf(false) }
         var showVideoControls by remember { mutableStateOf(true) }
         LaunchedEffect(showVideoControls, player.isPlaying) {
             if (showVideoControls && player.isPlaying) {
@@ -208,93 +299,6 @@ fun PlayerScreen(
                 showVideoControls = false
             }
         }
-        var playbackSpeed by remember { mutableFloatStateOf(1f) }
-
-        val isVideoByMetadata =
-            player.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO
-        var forceCloseVideo by remember { mutableStateOf(false) }
-
-        // RESET de estados al cambiar de canción para evitar que desaparezca o se quede en pantalla completa
-        LaunchedEffect(currentMediaId) {
-            forceCloseVideo = false
-            isVideoFullScreen = false // Evita que el siguiente video empiece en pantalla completa
-        }
-
-        val showVideoPlayer = (isVideoPlaying || isVideoByMetadata)
-
-        fun findActivity(context: Context): Activity? {
-            var ctx = context
-            while (ctx is ContextWrapper) {
-                if (ctx is Activity) return ctx
-                ctx = ctx.baseContext
-            }
-            return null
-        }
-
-        val activity = remember(context) { findActivity(context) }
-
-        // Optimización: recordamos el video efectivo para no buscarlo en cada recomposición
-        val effectiveVideo = remember(currentMediaId, isVideoByMetadata) {
-            currentVideo ?: if (isVideoByMetadata) {
-                val title = player.currentMediaItem?.mediaMetadata?.title?.toString()
-                videos.find { it.title == title }
-            } else null
-        }
-
-        LaunchedEffect(playbackSpeed) {
-            player.setPlaybackSpeed(playbackSpeed)
-        }
-
-        // Estados para overlays de brillo y volumen
-        var showBrightnessOverlay by remember { mutableStateOf(false) }
-        var brightnessLevel by remember { mutableIntStateOf(0) }
-        var showVolumeOverlay by remember { mutableStateOf(false) }
-        var volumeLevel by remember { mutableIntStateOf(0) }
-
-        val songDetails by produceState<SongDetails>(
-            SongDetails(),
-            currentSong ?: currentVideo
-        ) {
-            value = withContext(Dispatchers.IO) {
-                val media = currentSong ?: currentVideo
-                val data = when (media) {
-                    is Song -> media.data
-                    is Video -> media.data
-                    else -> ""
-                }
-                if (data.isBlank()) return@withContext SongDetails()
-
-                var details = getAudioMetadata(context, data)
-                if (media is Song && details.lyrics.isNullOrBlank() && settings.autoLyrics) {
-                    // Intentar buscar en LRCLIB si el usuario tiene activada la búsqueda automática
-                    try {
-                        val cleanTitle =
-                            media.title.replace(
-                                Regex("(?i)\\(.*?\\)|\\[.*?\\]"),
-                                ""
-                            ).trim()
-                        val artist = if (media.artist != "<unknown>") media.artist else ""
-                        val queryUrl = "https://lrclib.net/api/search?artist_name=${java.net.URLEncoder.encode(artist, "UTF-8")}&track_name=${java.net.URLEncoder.encode(cleanTitle, "UTF-8")}"
-                        val response = java.net.URL(queryUrl).readText()
-                        val jsonArray = org.json.JSONArray(response)
-                        if (jsonArray.length() > 0) {
-                            val item = jsonArray.getJSONObject(0)
-                            val bestLyrics = item.optString("syncedLyrics", "").ifEmpty { item.optString("plainLyrics", "") }
-                            details = details.copy(
-                                lyrics = bestLyrics,
-                                lyricsSource = "online"
-                            )
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                details
-            }
-        }
-
-        var showDetailedInfo by remember { mutableStateOf(false) }
-
         val scope = rememberCoroutineScope()
         val globalSnackbarHostState = remember { SnackbarHostState() }
 
@@ -1526,7 +1530,7 @@ fun PlayerScreen(
                         .padding(bottom = paddingValues.calculateBottomPadding()) // Pegado a la NavigationBar
                 ) {
                     androidx.compose.animation.AnimatedVisibility(
-                        visible = isPlayerVisible && currentTab != 4 && currentTab != 3 && !isVideoFullScreen,
+                        visible = isPlayerVisible && currentTab != 4 && currentTab != 3 && !isVideoFullScreen && !isLyricsFullScreen,
                         enter = slideInVertically(
                             initialOffsetY = { it / 2 },
                             animationSpec = spring(
@@ -1602,8 +1606,74 @@ fun PlayerScreen(
                     albumScale = albumScale,
                     albumCornerRadius = albumCornerRadius,
                     offsetX = offsetX,
-                    videos = videos
+                    videos = videos,
+                    // Nuevos parámetros pasados
+                    songDetails = songDetails,
+                    lyrics = lyrics,
+                    onLyricsChange = { lyrics = it },
+                    isEditingLyrics = isEditingLyrics,
+                    onEditLyricsChange = { isEditingLyrics = it },
+                    selectedLyricLines = selectedLyricLines,
+                    onSelectedLyricLinesChange = { selectedLyricLines = it },
+                    isSelectionMode = isSelectionMode,
+                    onSelectionModeChange = { isSelectionMode = it },
+                    editedLyricsText = editedLyricsText,
+                    onEditedLyricsTextChange = { editedLyricsText = it }
                 )
+            }
+
+            // --- PANTALLA DE LETRAS FIJA (Overlay superior como Dialog) ---
+            if (isLyricsFullScreen) {
+                Dialog(
+                    onDismissRequest = { isLyricsFullScreen = false },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = false
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface)
+                    ) {
+                        if (settings.unifiedLyricsBackground) {
+                            AnimatedMeshGradient(
+                                modifier = Modifier.fillMaxSize(),
+                                primaryColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                                secondaryColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f),
+                                tertiaryColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f),
+                                alpha = 0.5f,
+                                blurRadius = 120.dp
+                            )
+                        }
+
+                        LyricsView(
+                            player = player,
+                            currentSong = currentSong,
+                            lyrics = lyrics,
+                            onLyricsChange = { lyrics = it },
+                            onClose = { isLyricsFullScreen = false },
+                            isSelectionMode = isSelectionMode,
+                            onSelectionModeChange = { isSelectionMode = it },
+                            selectedLyricLines = selectedLyricLines,
+                            onSelectedLinesChange = { selectedLyricLines = it },
+                            showDetailedInfo = showDetailedInfo,
+                            onToggleDetailedInfo = { showDetailedInfo = !showDetailedInfo },
+                            isEditingLyrics = isEditingLyrics,
+                            onEditLyrics = { isEditingLyrics = it },
+                            currentPosition = currentPosition,
+                            totalDuration = totalDuration,
+                            isShuffleOn = isShuffleOn,
+                            repeatMode = repeatMode,
+                            songDetails = songDetails,
+                            settings = settings,
+                            components = components,
+                            strings = strings,
+                            onShowQueue = { showQueueDialog = true }
+                        )
+                    }
+                }
             }
 
                     AnimatedVisibility(

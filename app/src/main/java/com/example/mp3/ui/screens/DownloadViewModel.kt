@@ -38,7 +38,9 @@ data class DownloadInfo(
     val progress: Float = 0f,
     val status: String = "",
     val isFinished: Boolean = false,
-    val lyricsType: String? = null
+    val isError: Boolean = false,
+    val lyricsType: String? = null,
+    val format: String? = null
 )
 
 data class SearchResult(
@@ -53,6 +55,9 @@ class DownloadViewModel : ViewModel() {
     var downloads = mutableStateListOf<DownloadInfo>()
         private set
 
+    var history = mutableStateListOf<DownloadInfo>()
+        private set
+
     private val activeJobs = mutableMapOf<Long, Job>()
     
     private val _downloadEvents = MutableSharedFlow<String>()
@@ -65,7 +70,55 @@ class DownloadViewModel : ViewModel() {
     var isSearching by mutableStateOf(false)
     var isUpdatingYtDlp by mutableStateOf(false)
 
+    fun loadHistory(context: Context) {
+        val prefs = context.getSharedPreferences("download_prefs", Context.MODE_PRIVATE)
+        val jsonString = prefs.getString("history", null) ?: return
+        try {
+            val jsonArray = org.json.JSONArray(jsonString)
+            val loadedHistory = mutableListOf<DownloadInfo>()
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                loadedHistory.add(DownloadInfo(
+                    id = obj.optLong("id", System.currentTimeMillis()),
+                    url = obj.getString("url"),
+                    title = obj.getString("title"),
+                    isFinished = true,
+                    progress = 1f,
+                    status = "Completado",
+                    lyricsType = obj.optString("lyricsType", "").takeIf { it.isNotEmpty() },
+                    format = obj.optString("format", "").takeIf { it.isNotEmpty() }
+                ))
+            }
+            history.clear()
+            history.addAll(loadedHistory)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveHistory(context: Context) {
+        val prefs = context.getSharedPreferences("download_prefs", Context.MODE_PRIVATE)
+        val jsonArray = org.json.JSONArray()
+        history.take(100).forEach { info -> // Limit to last 100 entries
+            val jsonObject = org.json.JSONObject().apply {
+                put("id", info.id)
+                put("url", info.url)
+                put("title", info.title)
+                put("lyricsType", info.lyricsType ?: "")
+                put("format", info.format ?: "")
+            }
+            jsonArray.put(jsonObject)
+        }
+        prefs.edit { putString("history", jsonArray.toString()) }
+    }
+
+    fun clearHistory(context: Context) {
+        history.clear()
+        context.getSharedPreferences("download_prefs", Context.MODE_PRIVATE).edit { remove("history") }
+    }
+
     fun initYoutubeDL(context: Context) {
+        loadHistory(context)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 isUpdatingYtDlp = true
@@ -81,6 +134,12 @@ class DownloadViewModel : ViewModel() {
         }
     }
 
+    private fun getModernUserAgent(): String {
+        val versions = listOf("17_4_1", "17_5", "16_6", "17_0")
+        val version = versions.random()
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS $version like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${version.replace("_", ".")} Mobile/15E148 Safari/604.1"
+    }
+
     fun searchSong(query: String) {
         if (query.isBlank() || query.startsWith("http")) return
         isSearching = true
@@ -91,6 +150,10 @@ class DownloadViewModel : ViewModel() {
                 request.addOption("--dump-json")
                 request.addOption("--flat-playlist")
                 request.addOption("--no-playlist")
+                request.addOption("--no-check-certificate")
+                request.addOption("--no-cache-dir")
+                request.addOption("--user-agent", getModernUserAgent())
+                request.addOption("--extractor-args", "youtube:player_client=ios,mweb;player_skip=webpage")
                 
                 val info = try { YoutubeDL.getInstance().getInfo(request) } catch (e: Exception) { null }
 
@@ -176,7 +239,63 @@ class DownloadViewModel : ViewModel() {
         }
     }
 
-    fun startDownload(context: Context, url: String, strings: AppStrings) {
+    fun removeFromHistory(context: Context, downloadId: Long, deleteFile: Boolean = false) {
+        val item = history.find { it.id == downloadId } ?: return
+        history.remove(item)
+        saveHistory(context)
+        
+        if (deleteFile) {
+            val titleToDelete = item.title
+            val formatToDelete = item.format
+            viewModelScope.launch(Dispatchers.IO) {
+                deletePhysicalFile(context, titleToDelete, formatToDelete)
+            }
+        }
+    }
+
+    private fun deletePhysicalFile(context: Context, title: String, format: String?) {
+        val extensions = if (format != null) listOf(format) else listOf("mp3", "wav", "flac", "m4a", "opus", "aac", "mp4", "mkv", "webm", "avi")
+        
+        for (ext in extensions) {
+            val fileName = "$title.$ext"
+            val isVideo = ext in listOf("mp4", "mkv", "webm", "avi")
+            val collection = if (isVideo) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+                else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            }
+            
+            val folder = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_MUSIC
+            
+            try {
+                // Borrar archivo principal
+                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+                val selectionArgs = arrayOf(fileName, "%$folder/SharkPlayer%")
+                val deletedRows = context.contentResolver.delete(collection, selection, selectionArgs)
+                
+                if (deletedRows > 0) {
+                    Log.d("DownloadViewModel", "Deleted physical file: $fileName")
+                    // Borrar letra asociada si existe
+                    val lrcName = "$title.lrc"
+                    val lrcSelection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+                    val lrcSelectionArgs = arrayOf(lrcName, "%$folder/SharkPlayer%")
+                    context.contentResolver.delete(collection, lrcSelection, lrcSelectionArgs)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun startDownload(context: Context, url: String, strings: AppStrings, force: Boolean = false) {
+        // Verificar si ya existe en descargas activas o completadas recientemente en memoria
+        if (!force && (downloads.any { it.url == url && it.isFinished } || history.any { it.url == url })) {
+            viewModelScope.launch { _downloadEvents.emit("DUPLICATE_FILE|$url") }
+            return
+        }
+
         val downloadId = System.currentTimeMillis()
         val newDownload = DownloadInfo(
             id = downloadId,
@@ -188,7 +307,7 @@ class DownloadViewModel : ViewModel() {
 
         val job = viewModelScope.launch(Dispatchers.IO) {
             try {
-                fun updateInfo(status: String? = null, progress: Float? = null, title: String? = null, finished: Boolean? = null, lType: String? = null) {
+                fun updateInfo(status: String? = null, progress: Float? = null, title: String? = null, finished: Boolean? = null, lType: String? = null, format: String? = null) {
                     val index = downloads.indexOfFirst { it.id == downloadId }
                     if (index != -1) {
                         downloads[index] = downloads[index].copy(
@@ -196,12 +315,15 @@ class DownloadViewModel : ViewModel() {
                             progress = progress ?: downloads[index].progress,
                             title = title ?: downloads[index].title,
                             isFinished = finished ?: downloads[index].isFinished,
-                            lyricsType = lType ?: downloads[index].lyricsType
+                            lyricsType = lType ?: downloads[index].lyricsType,
+                            format = format ?: downloads[index].format
                         )
                     }
                 }
 
                 var finalUrl = if (url.startsWith("http")) url else "ytsearch1:$url"
+
+                // ... (lógica de Spotify omitida por brevedad en la visualización del chunk, pero se mantiene intacta)
 
                 // --- LÓGICA PARA SPOTIFY (BYPASS DRM CHECK) ---
                 if (url.contains("spotify.com")) {
@@ -283,19 +405,36 @@ class DownloadViewModel : ViewModel() {
                 val infoRequest = YoutubeDLRequest(finalUrl)
                 infoRequest.addOption("--no-check-certificate")
                 infoRequest.addOption("--no-playlist")
+                infoRequest.addOption("--no-cache-dir")
+                infoRequest.addOption("--user-agent", getModernUserAgent())
+                infoRequest.addOption("--extractor-args", "youtube:player_client=ios,mweb;player_skip=webpage")
                 
                 val videoInfo = try { YoutubeDL.getInstance().getInfo(infoRequest) } catch (e: Exception) { null }
                 val displayTitle = videoInfo?.title ?: (downloads.find { it.id == downloadId }?.title ?: strings.downloading)
+                val cleanTitle = displayTitle.replace(Regex("[\\\\/:*?\"<>|]"), "_")
                 updateInfo(title = displayTitle)
+
+                // Verificar existencia física del archivo antes de descargar
+                if (!force && checkIfFileExists(context, cleanTitle, selectedFormat)) {
+                    updateInfo(status = strings.completed, progress = 1f, finished = true, format = selectedFormat)
+                    val existingInfo = downloads.find { it.id == downloadId }
+                    if (existingInfo != null && history.none { it.url == existingInfo.url }) {
+                        history.add(0, existingInfo.copy(title = cleanTitle, isFinished = true, progress = 1f, format = selectedFormat))
+                        saveHistory(context)
+                    }
+                    withContext(Dispatchers.Main) { _downloadEvents.emit("DUPLICATE_FILE|$url") }
+                    return@launch
+                }
 
                 val downloadDir = File(context.cacheDir, "downloads")
                 if (!downloadDir.exists()) downloadDir.mkdirs()
                 
                 val tempFileName = "dl_${System.currentTimeMillis()}"
-                val request = YoutubeDLRequest(finalUrl)
+                val request = YoutubeDLRequest(videoInfo?.webpageUrl ?: finalUrl)
                 request.addOption("--no-check-certificate")
-                request.addOption("--force-ipv4")
-                request.addOption("--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36")
+                request.addOption("--no-cache-dir")
+                request.addOption("--user-agent", getModernUserAgent())
+                request.addOption("--extractor-args", "youtube:player_client=ios,mweb;player_skip=webpage")
                 
                 val isVideo = selectedFormat in listOf("mp4", "mkv", "webm", "avi")
                 if (isVideo) {
@@ -382,6 +521,15 @@ class DownloadViewModel : ViewModel() {
 
                     val audioPath = moveFileToPublicMusic(context, renamedFile)
                     val lyricsPath = if (finalLrcFile.exists()) moveFileToPublicMusic(context, finalLrcFile) else null
+                    
+                    updateInfo(status = strings.completed, progress = 100f, finished = true, lType = lyricsType, format = selectedFormat)
+
+                    // Añadir al historial y persistir
+                    val completedInfo = downloads.find { it.id == downloadId }
+                    if (completedInfo != null && history.none { it.url == completedInfo.url }) {
+                        history.add(0, completedInfo)
+                        saveHistory(context)
+                    }
 
                     val pathsToScan = listOfNotNull(audioPath, lyricsPath).toTypedArray()
                     if (pathsToScan.isNotEmpty()) {
@@ -400,7 +548,7 @@ class DownloadViewModel : ViewModel() {
                         }
                     }
 
-                    updateInfo(title = cleanTitle, status = strings.completed, finished = true, progress = 1f, lType = lyricsType)
+                    updateInfo(title = cleanTitle, status = strings.completed, finished = true, progress = 1f, lType = lyricsType, format = selectedFormat)
                     isLibraryUpdating = true
                     
                     // Aseguramos que el emit ocurra en el hilo principal para la UI
@@ -416,22 +564,47 @@ class DownloadViewModel : ViewModel() {
                 e.printStackTrace()
                 val errorMsg = e.message ?: ""
                 val userFriendlyError = when {
-                    errorMsg.contains("Signature", ignoreCase = true) || errorMsg.contains("decipher", ignoreCase = true) -> "Reintenta para actualizar el motor."
-                    errorMsg.contains("403") -> "Acceso denegado (403) por YouTube."
-                    errorMsg.contains("429") -> "Demasiadas peticiones (Bloqueo IP)."
+                    errorMsg.contains("Signature", ignoreCase = true) || errorMsg.contains("decipher", ignoreCase = true) -> strings.engineUpdateError
+                    errorMsg.contains("403") -> "Acceso denegado (403). Prueba a actualizar el motor."
+                    errorMsg.contains("429") -> strings.ipBlockError
                     errorMsg.contains("No space") -> "Sin espacio en disco."
                     else -> "${strings.downloadError}: ${errorMsg.take(50)}"
                 }
                 
                 val index = downloads.indexOfFirst { it.id == downloadId }
                 if (index != -1) {
-                    downloads[index] = downloads[index].copy(status = userFriendlyError, isFinished = false)
+                    downloads[index] = downloads[index].copy(status = userFriendlyError, isFinished = false, isError = true)
                 }
             } finally {
                 activeJobs.remove(downloadId)
             }
         }
         activeJobs[downloadId] = job
+    }
+
+    private fun checkIfFileExists(context: Context, cleanTitle: String, extension: String): Boolean {
+        val fileName = "$cleanTitle.$extension"
+        val isVideo = extension in listOf("mp4", "mkv", "webm", "avi")
+        val collection = if (isVideo) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            else MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            else MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        }
+        
+        val folder = if (isVideo) Environment.DIRECTORY_MOVIES else Environment.DIRECTORY_MUSIC
+        
+        val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+        val selectionArgs = arrayOf(fileName, "%$folder/SharkPlayer%")
+
+        return try {
+            context.contentResolver.query(collection, arrayOf(MediaStore.MediaColumns._ID), selection, selectionArgs, null)?.use { cursor ->
+                cursor.count > 0
+            } ?: false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun showCompletionNotification(context: Context, title: String) {

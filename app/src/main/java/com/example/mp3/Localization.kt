@@ -253,7 +253,16 @@ interface AppStrings {
     val search: String
     val updateEngine: String
     val exploreMusic: String
+    val ipBlockError: String
+    val engineUpdateError: String
     val selectFavoritePlatform: String
+    val downloadStepsTitle: String
+    val downloadStepsContent: String
+    val fileExistsTitle: String
+    val fileExistsMessage: String
+    val redownload: String
+    val history: String
+    val clearHistory: String
     val capture: String
     val lossless: String
     val play: String
@@ -264,6 +273,7 @@ interface AppStrings {
     val dynamicsProcessing: String
     val gain: String
     val limit: String
+    val deletePhysicalFile: String
 }
 
 
@@ -524,7 +534,22 @@ object SpanishStrings : AppStrings {
     override val search = "Buscar"
     override val updateEngine = "Actualizar motor"
     override val exploreMusic = "Explorar música"
+    override val ipBlockError = "YouTube bloqueó tu IP. Prueba a usar datos móviles o espera 5 min."
+    override val engineUpdateError = "Firma no válida. Pulsa 'Actualizar motor' en ajustes."
     override val selectFavoritePlatform = "Selecciona tu plataforma favorita"
+    override val downloadStepsTitle = "Guía de Descarga"
+    override val downloadStepsContent = """
+        1. Copia un enlace de YouTube o Spotify, o escribe el nombre de la canción.
+        2. Si recibes un error de 'Too many requests' (429), cambia de WiFi a datos móviles o viceversa.
+        3. Si la descarga no inicia, pulsa el botón 'Actualizar motor' (el icono de refresco arriba).
+        4. No realices muchas búsquedas rápidas seguidas para evitar bloqueos de IP.
+        5. Los archivos se guardarán en tu carpeta de Música/SharkPlayer.
+    """.trimIndent()
+    override val fileExistsTitle = "Archivo ya existente"
+    override val fileExistsMessage = "Esta canción ya parece estar en tu biblioteca. ¿Quieres descargarla de nuevo?"
+    override val redownload = "Descargar de nuevo"
+    override val history = "Historial"
+    override val clearHistory = "Borrar historial"
     override val capture = "Capturar"
     override val lossless = "Sin pérdida"
     override val play = "Reproducir"
@@ -535,6 +560,7 @@ object SpanishStrings : AppStrings {
     override val dynamicsProcessing = "Procesamiento Dinámico"
     override val gain = "Ganancia"
     override val limit = "Límite"
+    override val deletePhysicalFile = "¿Eliminar archivo del dispositivo?"
 }
 
 object EnglishStrings : AppStrings {
@@ -794,7 +820,22 @@ object EnglishStrings : AppStrings {
     override val search = "Search"
     override val updateEngine = "Update Engine"
     override val exploreMusic = "Explore Music"
+    override val ipBlockError = "YouTube blocked your IP. Try using mobile data or wait 5 min."
+    override val engineUpdateError = "Invalid signature. Tap 'Update Engine' in settings."
     override val selectFavoritePlatform = "Select your favorite platform"
+    override val downloadStepsTitle = "Download Guide"
+    override val downloadStepsContent = """
+        1. Copy a YouTube or Spotify link, or type the song name.
+        2. If you get a 'Too many requests' error (429), switch from WiFi to mobile data or vice-versa.
+        3. If the download doesn't start, tap the 'Update Engine' button (the refresh icon above).
+        4. Avoid making many fast searches to prevent IP blocks.
+        5. Files will be saved in your Music/SharkPlayer folder.
+    """.trimIndent()
+    override val fileExistsTitle = "File already exists"
+    override val fileExistsMessage = "This song seems to be already in your library. Do you want to download it again?"
+    override val redownload = "Download again"
+    override val history = "History"
+    override val clearHistory = "Clear history"
     override val capture = "Capture"
     override val lossless = "Lossless"
     override val play = "Play"
@@ -805,4 +846,5 @@ object EnglishStrings : AppStrings {
     override val dynamicsProcessing = "Dynamics Processing"
     override val gain = "Gain"
     override val limit = "Limit"
+    override val deletePhysicalFile = "Delete file from device?"
 }

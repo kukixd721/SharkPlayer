@@ -43,7 +43,7 @@ fun KaraokeView(
     val activeIndex = lyricsList.indexOfLast { it.timeMs <= currentPositionMs }.coerceAtLeast(0)
 
     LaunchedEffect(activeIndex) {
-        if (lyricsList.isNotEmpty() && !selectionMode) {
+        if (lyricsList.isNotEmpty() && !selectionMode && !listState.isScrollInProgress) {
             val scrollTarget = (activeIndex - 2).coerceAtLeast(0)
             listState.animateScrollToItem(scrollTarget)
         }

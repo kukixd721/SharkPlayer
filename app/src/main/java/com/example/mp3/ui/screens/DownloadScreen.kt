@@ -12,6 +12,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,10 @@ fun DownloadScreen(
     val strings = LocalStrings.current
     var url by remember { mutableStateOf("") }
     var showWebView by remember { mutableStateOf(false) }
+    var showHelpDialog by remember { mutableStateOf(false) }
+    var showHistoryDialog by remember { mutableStateOf(false) }
+    var itemToRemoveFromHistory by remember { mutableStateOf<DownloadInfo?>(null) }
+    var duplicateUrl by remember { mutableStateOf<String?>(null) }
     var webUrl by remember { mutableStateOf("https://music.youtube.com") }
     var showSourceSelector by remember { mutableStateOf(false) }
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
@@ -68,6 +73,149 @@ fun DownloadScreen(
 
     LaunchedEffect(Unit) {
         viewModel.initYoutubeDL(context)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.downloadEvents.collect { event ->
+            if (event.startsWith("DUPLICATE_FILE|")) {
+                duplicateUrl = event.substringAfter("|")
+            }
+        }
+    }
+
+    // DIÁLOGO DE CONFIRMACIÓN PARA BORRAR FÍSICAMENTE
+    if (itemToRemoveFromHistory != null) {
+        AlertDialog(
+            onDismissRequest = { itemToRemoveFromHistory = null },
+            title = { Text(strings.deleteSong, fontWeight = FontWeight.Black) },
+            text = {
+                Column {
+                    Text(strings.deleteSongConfirm)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { 
+                            // Aquí se podría añadir un checkbox si se desea, 
+                            // pero por ahora usaremos la lógica de preguntar si borrar físico
+                        }
+                    ) {
+                        // Por simplicidad en este paso, el diálogo preguntará directamente.
+                        // Podríamos mejorar esto con un Switch.
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        itemToRemoveFromHistory?.let { viewModel.removeFromHistory(context, it.id, deleteFile = true) }
+                        itemToRemoveFromHistory = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(strings.deleteSong)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    itemToRemoveFromHistory?.let { viewModel.removeFromHistory(context, it.id, deleteFile = false) }
+                    itemToRemoveFromHistory = null
+                }) {
+                    Text(strings.clearHistory) // "Solo quitar del historial"
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
+    }
+
+    // DIÁLOGO DE DUPLICADO
+    if (duplicateUrl != null) {
+        AlertDialog(
+            onDismissRequest = { duplicateUrl = null },
+            title = { Text(strings.fileExistsTitle, fontWeight = FontWeight.Black) },
+            text = { Text(strings.fileExistsMessage) },
+            confirmButton = {
+                Button(onClick = { 
+                    duplicateUrl?.let { viewModel.startDownload(context, it, strings, force = true) }
+                    duplicateUrl = null
+                }) {
+                    Text(strings.redownload)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { duplicateUrl = null }) {
+                    Text(strings.cancel)
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
+    }
+
+    // DIÁLOGO DE HISTORIAL
+    if (showHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showHistoryDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(strings.history, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                    if (viewModel.history.isNotEmpty()) {
+                        TextButton(onClick = { viewModel.clearHistory(context) }) {
+                            Text(strings.clearHistory, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            },
+            text = {
+                Box(modifier = Modifier.heightIn(max = 400.dp)) {
+                    if (viewModel.history.isEmpty()) {
+                        Text(strings.noActiveDownloads, modifier = Modifier.padding(24.dp))
+                    } else {
+                        LazyColumn {
+                            items(viewModel.history) { item ->
+                                DownloadItemCard(
+                                    download = item,
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    onCancel = { viewModel.startDownload(context, item.url, strings, force = true) },
+                                    onRemove = { itemToRemoveFromHistory = item }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showHistoryDialog = false }) {
+                    Text(strings.close)
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
+    }
+
+    // DIÁLOGO DE AYUDA / GUÍA DE DESCARGA
+    if (showHelpDialog) {
+        AlertDialog(
+            onDismissRequest = { showHelpDialog = false },
+            icon = { Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.primary) },
+            title = {
+                Text(
+                    strings.downloadStepsTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black
+                )
+            },
+            text = {
+                Text(
+                    strings.downloadStepsContent,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showHelpDialog = false }) {
+                    Text(strings.accept, fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
     }
 
     // DIÁLOGO DE SELECCIÓN DE FUENTE (DISEÑO SÓLIDO LIMPIO)
@@ -401,6 +549,28 @@ fun DownloadScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
+                                IconButton(
+                                    onClick = { showHistoryDialog = true },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.History,
+                                        contentDescription = strings.history,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showHelpDialog = true },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = "Ayuda",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                         }
                         
@@ -613,7 +783,15 @@ fun DownloadScreen(
                     DownloadItemCard(
                         download = download, 
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                        onCancel = { viewModel.cancelDownload(download.id) }
+                        onCancel = { 
+                            if (download.isError) {
+                                viewModel.cancelDownload(download.id)
+                                viewModel.startDownload(context, download.url, strings)
+                            } else {
+                                viewModel.cancelDownload(download.id)
+                            }
+                        },
+                        onRemove = if (download.isFinished) { { itemToRemoveFromHistory = download } } else null
                     )
                 }
             }
@@ -643,7 +821,8 @@ fun SourceItem(name: String, icon: ImageVector, color: Color, modifier: Modifier
 fun DownloadItemCard(
     download: DownloadInfo, 
     modifier: Modifier = Modifier,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    onRemove: (() -> Unit)? = null
 ) {
     val progress by animateFloatAsState(
         targetValue = download.progress, 
@@ -705,17 +884,27 @@ fun DownloadItemCard(
                 }
                 
                 Surface(
-                    onClick = onCancel,
+                    onClick = {
+                        if (download.isFinished && onRemove != null) {
+                            onRemove()
+                        } else {
+                            onCancel()
+                        }
+                    },
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    color = if (download.isError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.size(40.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    border = BorderStroke(1.dp, if (download.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (download.isFinished) Icons.Default.Delete else Icons.Default.Close,
+                            imageVector = when {
+                                download.isFinished -> Icons.Default.Delete
+                                download.isError -> Icons.Default.Refresh
+                                else -> Icons.Default.Close
+                            },
                             contentDescription = "Acción",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (download.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }

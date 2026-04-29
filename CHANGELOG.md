@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6] - 2026-04-13
+### Actual
+- 📂 **Gestión de Descargas**: Añadido nuevo historial de descargas y una guía detallada para el usuario.
+- 📑 **Gesto de Cola**: Acceso intuitivo a la cola de reproducción deslizando hacia arriba desde el reproductor.
+- 🛠️ **Solución de Descargas**: Corregido un error crítico que impedía bajar archivos correctamente.
+- 📜 **Scroll de Letras**: Reparada la navegación y el desplazamiento en la vista de letras de canciones.
+
 ## [1.5] - 2026-04-12
 ### Actual
 - 📊 **Visualizador Reactivo**: Nuevo sistema de procesamiento FFT con agrupación cuadrática para una respuesta dinámica en todas las frecuencias.
