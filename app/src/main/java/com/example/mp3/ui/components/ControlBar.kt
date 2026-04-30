@@ -171,13 +171,19 @@ fun ControlBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(0.dp) // Espaciado más compacto
                 ) {
-                    if ((player.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO) && forceCloseVideo) {
-                        IconButton(onClick = onRestoreVideo) {
+                    if (player.currentMediaItem?.mediaMetadata?.mediaType == MediaMetadata.MEDIA_TYPE_VIDEO) {
+                        IconButton(onClick = {
+                            if (forceCloseVideo) {
+                                player.stop() // "Cerrar de verdad"
+                            } else {
+                                onCollapse() // "Minimizar"
+                            }
+                        }) {
                             Icon(
-                                Icons.Default.VideoLibrary,
+                                if (forceCloseVideo) Icons.Default.Close else Icons.Default.VideoLibrary,
                                 null,
                                 modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (forceCloseVideo) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                             )
                         }
                     }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -21,11 +22,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -52,6 +55,181 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 @Composable
+fun CompactAlbumCard(
+    song: Song,
+    onSongClick: (Song) -> Unit,
+    modifier: Modifier = Modifier,
+    getAlbumArt: ((String) -> ByteArray?)? = null,
+    settings: PlayerSettings? = null
+) {
+    Surface(
+        onClick = { onSongClick(song) },
+        modifier = modifier
+            .padding(4.dp)
+            .aspectRatio(0.75f),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f)
+    ) {
+        Column {
+            val art by produceState<ByteArray?>(null, song.data) {
+                value = withContext(Dispatchers.IO) {
+                    getAlbumArt?.invoke(song.data) ?: settings?.getAlbumArt(song.data)
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                val musicIcon = rememberVectorPainter(Icons.Default.MusicNote)
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(art ?: File(song.data))
+                        .crossfade(true).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = musicIcon,
+                    fallback = musicIcon
+                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SongItemRow(
+    song: Song,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onMenuClick: ((Song) -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    getAlbumArt: ((String) -> ByteArray?)? = null,
+    settings: PlayerSettings? = null
+) {
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isSelected) 32.dp else 24.dp,
+        animationSpec = spring(
+            stiffness = Spring.StiffnessMediumLow,
+            dampingRatio = Spring.DampingRatioNoBouncy
+        ),
+        label = "cornerRadius"
+    )
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(cornerRadius),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(10.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val art by produceState<ByteArray?>(null, song.data) {
+                value = withContext(Dispatchers.IO) { 
+                    getAlbumArt?.invoke(song.data) ?: settings?.getAlbumArt(song.data)
+                }
+            }
+
+            val artCornerRadius by animateDpAsState(
+                targetValue = if (isSelected) 27.dp else 14.dp,
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessMediumLow,
+                    dampingRatio = Spring.DampingRatioNoBouncy
+                ),
+                label = "artCornerRadius"
+            )
+
+            Surface(
+                modifier = Modifier.size(54.dp),
+                shape = RoundedCornerShape(artCornerRadius),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                val musicIcon = rememberVectorPainter(Icons.Default.MusicNote)
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(art ?: File(song.data))
+                        .crossfade(true).build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = musicIcon,
+                    fallback = musicIcon
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (trailingContent != null) {
+                trailingContent()
+            } else if (onMenuClick != null) {
+                IconButton(
+                    onClick = { onMenuClick(song) },
+                    modifier = Modifier.size(42.dp)
+                ) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SubMusicList(
     title: String,
     songs: List<Song>,
@@ -63,58 +241,164 @@ fun SubMusicList(
     onEditClick: (() -> Unit)? = null
 ) {
     val strings = LocalStrings.current
+    val scrollState = rememberLazyListState()
     
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, null)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.5).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                subTitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-            onEditClick?.let {
-                Button(
-                    onClick = it,
-                    shape = RoundedCornerShape(22.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                ) {
-                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(strings.editTags, fontWeight = FontWeight.Bold)
-                }
-            }
+    // Altura máxima del header
+    val headerHeight = 340.dp
+    val density = LocalDensity.current
+    val headerHeightPx = with(density) { headerHeight.toPx() }
+    
+    // Calcular el offset de colapso basado en el scroll
+    val scrollOffset = remember { derivedStateOf { 
+        if (scrollState.firstVisibleItemIndex == 0) {
+            scrollState.firstVisibleItemScrollOffset.toFloat().coerceAtMost(headerHeightPx)
+        } else {
+            headerHeightPx
         }
+    } }
 
+    // Fracción de colapso (0.0 = expandido, 1.0 = colapsado)
+    val collapseFraction = remember { derivedStateOf { (scrollOffset.value / headerHeightPx).coerceIn(0f, 1f) } }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // MusicList al fondo, con padding superior para dejar espacio al header
         MusicList(
             songs = songs,
             player = player,
             isPlaying = isPlaying,
-            config = config
+            config = config,
+            listState = scrollState,
+            headerContent = {
+                // Espaciador para que la lista empiece debajo del header expandido
+                Spacer(modifier = Modifier.height(headerHeight))
+            }
         )
+
+        // Header Immersivo
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(headerHeight - ( (headerHeight - 80.dp) * collapseFraction.value))
+                .graphicsLayer {
+                    // Sutil efecto de parallax
+                    translationY = -scrollOffset.value * 0.5f
+                }
+        ) {
+            // Imagen de fondo con gradiente
+            if (subTitle != null && subTitle.startsWith("/")) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(File(subTitle))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = 1f - collapseFraction.value
+                    }
+                )
+            } else if (songs.isNotEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(songs.first().data)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = 1f - collapseFraction.value
+                    }
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+            }
+
+            // Overlay para oscurecer y gradiente inferior
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.4f),
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.surface.copy(alpha = collapseFraction.value),
+                                MaterialTheme.colorScheme.surface
+                            )
+                        )
+                    )
+            )
+
+            // Título y acciones (se mueven y escalan con el scroll)
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = (24.dp * (1f - collapseFraction.value)).coerceAtLeast(8.dp))
+                    .graphicsLayer {
+                        val scale = 1f - (collapseFraction.value * 0.3f)
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = collapseFraction.value * with(density) { 48.dp.toPx() }
+                    }
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = (-1).sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                if (collapseFraction.value < 0.5f) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.graphicsLayer { alpha = 1f - (collapseFraction.value * 2f).coerceIn(0f, 1f) }
+                    ) {
+                        Text(
+                            text = "${songs.size} ${if (songs.size == 1) strings.songs.dropLast(1) else strings.songs}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        Spacer(modifier = Modifier.weight(1f))
+                        
+                        onEditClick?.let {
+                            FilledTonalButton(
+                                onClick = it,
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(strings.editPlaylist, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Botón atrás fijo o flotante
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(8.dp)
+                .align(Alignment.TopStart)
+                .background(
+                    Color.Black.copy(alpha = (0.3f * (1f - collapseFraction.value)).coerceAtLeast(0f)), 
+                    CircleShape
+                )
+        ) {
+            Icon(Icons.Default.ArrowBack, null, tint = if (collapseFraction.value > 0.5f) MaterialTheme.colorScheme.onSurface else Color.White)
+        }
     }
 }
 
@@ -420,11 +704,12 @@ fun MusicList(
     songs: List<Song>,
     player: Player,
     isPlaying: Boolean,
-    config: MusicListConfig
+    config: MusicListConfig,
+    listState: LazyListState = rememberLazyListState(),
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val strings = LocalStrings.current
     val haptic = LocalHapticFeedback.current
-    val listState = rememberLazyListState()
     val activeMediaItem = player.currentMediaItem
     
     var draggedItemKey by remember { mutableStateOf<String?>(null) }
@@ -470,8 +755,12 @@ fun MusicList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(top = 16.dp, bottom = 180.dp)
+        contentPadding = PaddingValues(top = if (headerContent == null) 16.dp else 0.dp, bottom = 180.dp)
     ) {
+        headerContent?.let {
+            item { it() }
+        }
+
         if (config.isDraggable) {
             item {
                 Row(
@@ -800,6 +1089,12 @@ fun MusicList(
                     config.onAddToPlaylist(song)
                     showMenuForSong = null 
                 },
+                onRemoveFromPlaylist = config.onRemoveFromPlaylist?.let { callback ->
+                    {
+                        callback(song)
+                        showMenuForSong = null
+                    }
+                },
                 onDelete = { 
                     showDeleteConfirm = song
                     showMenuForSong = null
@@ -858,15 +1153,13 @@ fun SongOptionsMenuContent(
     onPlayNext: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onDelete: () -> Unit,
+    onRemoveFromPlaylist: (() -> Unit)? = null,
     onEditTags: () -> Unit,
     onShowInfo: () -> Unit,
     onShare: () -> Unit,
-    getAlbumArt: (String) -> ByteArray?,
-    favoriteIds: Set<Long> = emptySet(),
-    onToggleFavoriteId: (Long) -> Unit = {}
+    getAlbumArt: (String) -> ByteArray?
 ) {
     val strings = LocalStrings.current
-    val isFavorite = song.id in favoriteIds
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -955,7 +1248,7 @@ fun SongOptionsMenuContent(
 
             // Botón Like
             Surface(
-                onClick = { onToggleFavoriteId(song.id) },
+                onClick = onToggleFavorite,
                 modifier = Modifier.size(64.dp),
                 shape = CircleShape,
                 color = Color.White.copy(alpha = 0.05f)
@@ -1026,7 +1319,7 @@ fun SongOptionsMenuContent(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Fila 3: Playlist, Delete
+        // Fila 3: Playlist, Remove from Playlist (si aplica), Delete
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1045,6 +1338,25 @@ fun SongOptionsMenuContent(
                     Icon(Icons.Default.PlaylistAdd, null, tint = Color.White)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(strings.playlist, color = Color.White)
+                }
+            }
+
+            if (onRemoveFromPlaylist != null) {
+                Surface(
+                    onClick = onRemoveFromPlaylist,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(Icons.Default.PlaylistRemove, null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(strings.removeFromPlaylist, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
 

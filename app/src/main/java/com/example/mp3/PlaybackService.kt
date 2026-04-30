@@ -25,6 +25,9 @@ import androidx.media3.session.MediaSession
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.Futures
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(UnstableApi::class)
 class PlaybackService : MediaLibraryService() {
@@ -47,28 +50,49 @@ class PlaybackService : MediaLibraryService() {
 
     private var startTime: Long = 0
     private var currentSongId: String? = null
+    private var currentSongTitle: String = "Unknown"
+    private var currentSongArtist: String = "Unknown"
+    private var currentSongAlbum: String = "Unknown"
+    private var currentSongGenre: String = "Unknown"
     private var currentSong: Song? = null
 
     private val checkPositionRunnable = object : Runnable {
+        private var lastStatsUpdate = 0L
         override fun run() {
             checkCrossfade()
+            
+            // Actualizar estadísticas cada 20 segundos de reproducción continua
+            val now = System.currentTimeMillis()
+            if (now - lastStatsUpdate > 20000) {
+                updateStats()
+                lastStatsUpdate = now
+            }
+            
             handler.postDelayed(this, 500)
         }
     }
 
-    private fun updateStats() {
+    private fun updateStats(force: Boolean = false) {
         val songId = currentSongId ?: return
         val player = exoPlayer ?: return
-        if (player.isPlaying) {
+        
+        // Registramos si está reproduciendo O si es una llamada forzada (ej. al pausar o cambiar de canción)
+        if (player.isPlaying || force) {
             val now = System.currentTimeMillis()
-            val duration = now - startTime
-            if (duration > 1000) {
-                statsBackgroundHandler.post {
-                    // Nota: StatisticsManager no tiene updateStats, usamos trackPlay o similar
-                    // Simplificamos por ahora para evitar errores de compilación
+            if (startTime > 0) {
+                val duration = now - startTime
+                if (duration > 500) { // Guardar incluso fragmentos cortos (> 0.5s)
+                    val title = currentSongTitle
+                    val artist = currentSongArtist
+                    val album = currentSongAlbum
+                    val genre = currentSongGenre
+                    
+                    statsBackgroundHandler.post {
+                        StatisticsManager.trackPlay(this, songId, title, artist, album, genre, duration, isNewPlay = false)
+                    }
                 }
             }
-            startTime = now
+            startTime = if (player.isPlaying) now else 0
         }
     }
 
@@ -125,18 +149,44 @@ class PlaybackService : MediaLibraryService() {
                     startTime = System.currentTimeMillis()
                     handler.post(checkPositionRunnable)
                 } else {
-                    updateStats()
+                    updateStats(force = true)
                     handler.removeCallbacks(checkPositionRunnable)
                 }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                updateStats()
+                updateStats(force = true)
+                
                 currentSongId = mediaItem?.mediaId
+                if (mediaItem != null) {
+                    val metadata = mediaItem.mediaMetadata
+                    currentSongTitle = metadata.title?.toString() ?: "Unknown"
+                    currentSongArtist = metadata.artist?.toString() ?: "Unknown"
+                    currentSongAlbum = metadata.albumTitle?.toString() ?: "Unknown"
+                    currentSongGenre = metadata.genre?.toString() ?: "Unknown"
+
+                    statsBackgroundHandler.post {
+                        StatisticsManager.trackPlay(this@PlaybackService, currentSongId!!, currentSongTitle, currentSongArtist, currentSongAlbum, currentSongGenre, 0L, isNewPlay = true)
+                    }
+
+                    val scope = CoroutineScope(Dispatchers.IO)
+                    scope.launch {
+                        val allSongs = getAudioFiles(this@PlaybackService) { }
+                        currentSong = allSongs.find { it.id.toString() == mediaItem.mediaId }
+                    }
+                } else {
+                    currentSongId = null
+                    currentSongTitle = "Unknown"
+                    currentSongArtist = "Unknown"
+                    currentSongAlbum = "Unknown"
+                    currentSongGenre = "Unknown"
+                    currentSong = null
+                }
                 startTime = System.currentTimeMillis()
             }
         })
         
+        StatisticsManager.startSession(this)
         updateCrossfadeSettings()
     }
 
@@ -320,7 +370,7 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = mediaLibrarySession
 
     override fun onDestroy() {
-        updateStats()
+        updateStats(force = true)
         statsBackgroundHandler.post {
             StatisticsManager.endSession(this)
             statsThread.quitSafely()

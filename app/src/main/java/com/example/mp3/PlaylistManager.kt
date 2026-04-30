@@ -148,4 +148,14 @@ object PlaylistManager {
         ids.add(songId.toString())
         prefs.edit { putStringSet("songs_$playlistName", ids) }
     }
+
+    /**
+     * Elimina una canción de una lista.
+     */
+    fun removeSongFromPlaylist(context: Context, playlistName: String, songId: Long) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val ids = getSongsInPlaylist(context, playlistName).map { it.toString() }.toMutableSet()
+        ids.remove(songId.toString())
+        prefs.edit { putStringSet("songs_$playlistName", ids) }
+    }
 }

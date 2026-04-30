@@ -424,25 +424,27 @@ fun VideoCard(
     settings: PlayerSettings
 ) {
     val context = LocalContext.current
-    var thumbnail by remember(video.data) { mutableStateOf<Bitmap?>(null) }
+    var thumbnail by remember(video.data, video.thumbnailUri) { mutableStateOf<Any?>(video.thumbnailUri) }
 
-    LaunchedEffect(video.data) {
-        thumbnail = withContext(Dispatchers.IO) {
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    context.contentResolver.loadThumbnail(
-                        android.net.Uri.fromFile(File(video.data)),
-                        Size(480, 480),
-                        null
-                    )
-                } else {
-                    ThumbnailUtils.createVideoThumbnail(
-                        video.data,
-                        MediaStore.Video.Thumbnails.MINI_KIND
-                    )
+    LaunchedEffect(video.data, video.thumbnailUri) {
+        if (video.thumbnailUri == null) {
+            thumbnail = withContext(Dispatchers.IO) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        context.contentResolver.loadThumbnail(
+                            android.net.Uri.fromFile(java.io.File(video.data)),
+                            Size(480, 480),
+                            null
+                        )
+                    } else {
+                        ThumbnailUtils.createVideoThumbnail(
+                            video.data,
+                            MediaStore.Video.Thumbnails.MINI_KIND
+                        )
+                    }
+                } catch (e: Exception) {
+                    null
                 }
-            } catch (e: Exception) {
-                null
             }
         }
     }
@@ -460,7 +462,10 @@ fun VideoCard(
         ) {
             if (thumbnail != null) {
                 AsyncImage(
-                    model = thumbnail,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbnail)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

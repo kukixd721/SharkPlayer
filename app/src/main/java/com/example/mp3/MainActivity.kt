@@ -260,7 +260,9 @@ class MainActivity : ComponentActivity() {
                                     backgroundAlpha = viewModel.backgroundAlpha,
                                     onBackgroundAlphaChange = { viewModel.updateBackgroundAlpha(it) },
                                     useImageDynamicColor = viewModel.useImageDynamicColor,
-                                    onUseImageDynamicColorChange = { viewModel.updateUseImageDynamicColor(it) }
+                                    onUseImageDynamicColorChange = { viewModel.updateUseImageDynamicColor(it) },
+                                    extraVideoPaths = viewModel.extraVideoPaths,
+                                    onToggleExtraVideoPath = { viewModel.toggleExtraVideoPath(it) }
                                 )
 
                                 val components = PlayerComponents(

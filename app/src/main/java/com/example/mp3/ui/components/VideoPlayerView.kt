@@ -112,7 +112,7 @@ fun VideoPlayerView(
     BackHandler {
         if (isVideoFullScreen) {
             onToggleFullScreen(false)
-        } else {
+        } else if (showVideoPlayer) {
             onCloseVideo()
         }
     }
@@ -532,7 +532,13 @@ fun VideoPlayerView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
-                                onClick = onCloseVideo,
+                                onClick = {
+                                    if (isVideoFullScreen) {
+                                        onToggleFullScreen(false)
+                                    } else {
+                                        onCloseVideo()
+                                    }
+                                },
                                 modifier = Modifier.size(56.dp),
                                 shape = CircleShape,
                                 color = MaterialTheme.colorScheme.surfaceContainerHigh,

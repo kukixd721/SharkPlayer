@@ -6,7 +6,6 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.core.net.toUri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -27,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -159,7 +157,9 @@ fun PlayerScreen(
         // RESET de estados al cambiar de canción para evitar que desaparezca o se quede en pantalla completa
         LaunchedEffect(currentMediaId) {
             forceCloseVideo = false
-            isVideoFullScreen = false // Evita que el siguiente video empiece en pantalla completa
+            if (!isVideoPlaying && !isVideoByMetadata) {
+                isVideoFullScreen = false
+            }
         }
 
         val showVideoPlayer = (isVideoPlaying || isVideoByMetadata)
@@ -276,7 +276,33 @@ fun PlayerScreen(
                 currentTab = pagerState.settledPage
             }
         }
-        var sortOrder by rememberSaveable { mutableIntStateOf(0) } // 0: Recientes, 1: A-Z, 2: Favoritos
+        val prefs = remember { context.getSharedPreferences("prefs", Context.MODE_PRIVATE) }
+        var sortOrder by rememberSaveable { mutableIntStateOf(0) } // 0: Recientes, 1: A-Z, 2: Favoritos, 3: Artista, 4: Álbum
+        var searchHistory by rememberSaveable { 
+            val savedHistory = prefs.getString("search_history", "") ?: ""
+            mutableStateOf(if (savedHistory.isEmpty()) emptyList<String>() else savedHistory.split("|"))
+        }
+
+        fun addToSearchHistory(query: String) {
+            if (query.isBlank()) return
+            val currentList = searchHistory.toMutableList()
+            currentList.remove(query)
+            currentList.add(0, query)
+            val newList = currentList.take(10)
+            searchHistory = newList
+            prefs.edit { putString("search_history", newList.joinToString("|")) }
+        }
+
+        fun removeFromSearchHistory(query: String) {
+            val newList = searchHistory.filter { it != query }
+            searchHistory = newList
+            prefs.edit { putString("search_history", newList.joinToString("|")) }
+        }
+
+        fun clearSearchHistory() {
+            searchHistory = emptyList()
+            prefs.edit { remove("search_history") }
+        }
         var showStyleScreen by remember { mutableStateOf(false) }
         var showMenu by remember { mutableStateOf(false) }
         var showAboutDialog by remember { mutableStateOf(false) }
@@ -330,7 +356,6 @@ fun PlayerScreen(
             // Manejado dentro de VideoPlayerView para mayor consistencia
         }
 
-        val prefs = remember { context.getSharedPreferences("prefs", Context.MODE_PRIVATE) }
         var showFirstRunDialog by remember {
             val prefsApp = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
             mutableStateOf(prefsApp.getBoolean("is_first_run", true))
@@ -387,23 +412,42 @@ fun PlayerScreen(
 
         val favoriteSongs =
             remember(songList, favoriteIds) { songList.filter { it.id in favoriteIds } }
-        val songsByArtist = remember(songList) { songList.groupBy { it.artist } }
-        val songsByAlbum = remember(songList) { songList.groupBy { it.album } }
-        val songsByFolder = remember(songList) {
+
+        val librarySongs = remember(songList, ignoredFolders, sortOrder, favoriteIds) {
+            val filtered = songList.filter { song ->
+                !ignoredFolders.any { ignored -> song.data.startsWith(ignored) }
+            }
+            when (sortOrder) {
+                0 -> filtered.sortedByDescending { it.id } // Asumiendo que ID mayor es más reciente
+                1 -> filtered.sortedBy { it.title.lowercase() }
+                2 -> filtered.filter { it.id in favoriteIds }.sortedBy { it.title.lowercase() }
+                3 -> filtered.sortedBy { it.artist.lowercase() }
+                4 -> filtered.sortedBy { it.album.lowercase() }
+                else -> filtered
+            }
+        }
+
+        val filteredSongs = remember(searchQuery, songList, ignoredFolders) {
+            songList.filter { song ->
+                val matchesSearch = song.title.contains(searchQuery, ignoreCase = true) ||
+                        song.artist.contains(searchQuery, ignoreCase = true) ||
+                        song.album.contains(searchQuery, ignoreCase = true)
+
+                val isIgnored = ignoredFolders.any { ignored -> song.data.startsWith(ignored) }
+
+                matchesSearch && !isIgnored
+            }
+        }
+
+        val songsByArtist = remember(librarySongs) { librarySongs.groupBy { it.artist } }
+        val songsByAlbum = remember(librarySongs) { librarySongs.groupBy { it.album } }
+        val songsByFolder = remember(songList) { // Usamos songList para mostrar TODAS las carpetas (incluidas las ignoradas)
             songList.groupBy { song ->
                 val file = File(song.data)
                 file.parent ?: "Unknown"
             }
         }
         var playlistsNames by remember { mutableStateOf(PlaylistManager.getPlaylistNames(context)) }
-
-        val filteredSongs = remember(searchQuery, songList) {
-            songList.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                        it.artist.contains(searchQuery, ignoreCase = true) ||
-                        it.album.contains(searchQuery, ignoreCase = true)
-            }
-        }
 
         val tabs = listOf(
             LocalStrings.current.all,
@@ -765,45 +809,98 @@ fun PlayerScreen(
 
         // --- DIÁLOGOS DE LISTAS DE REPRODUCCIÓN (Hoisted) ---
         if (showCreatePlaylistDialog) {
+            var creatingName by remember { mutableStateOf("") }
+            var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+            val imageLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+            ) { uri: android.net.Uri? ->
+                selectedImageUri = uri
+            }
+
             AlertDialog(
                 onDismissRequest = {
                     showCreatePlaylistDialog = false
-                    Unit
+                    selectedImageUri = null
                 },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 6.dp,
-                title = { Text(strings.createPlaylist, color = MaterialTheme.colorScheme.primary) },
+                shape = RoundedCornerShape(32.dp),
+                title = { 
+                    Text(
+                        strings.createPlaylist, 
+                        style = MaterialTheme.typography.headlineSmall, 
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    ) 
+                },
                 text = {
-                    OutlinedTextField(
-                        value = newPlaylistName,
-                        onValueChange = { newPlaylistName = it },
-                        label = { Text(strings.enterPlaylistName) },
-                        singleLine = true,
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = MaterialTheme.colorScheme.primary,
-                            unfocusedTextColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            focusedLabelColor = MaterialTheme.colorScheme.primary,
-                            unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Vista previa de imagen seleccionada
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                .clickable { imageLauncher.launch("image/*") },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (selectedImageUri != null) {
+                                AsyncImage(
+                                    model = selectedImageUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(
+                                        Icons.Default.AddPhotoAlternate, 
+                                        null, 
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        strings.changeCover,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        OutlinedTextField(
+                            value = creatingName,
+                            onValueChange = { creatingName = it },
+                            label = { Text(strings.enterPlaylistName) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            )
                         )
-                    )
+                    }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            if (newPlaylistName.isNotBlank()) {
-                                PlaylistManager.createPlaylist(context, newPlaylistName)
+                            if (creatingName.isNotBlank()) {
+                                PlaylistManager.createPlaylist(context, creatingName)
+                                selectedImageUri?.let { uri ->
+                                    PlaylistManager.setPlaylistImage(context, creatingName, uri.toString())
+                                }
                                 playlistsNames = PlaylistManager.getPlaylistNames(context)
-                                newPlaylistName = ""
                                 showCreatePlaylistDialog = false
-                                Unit
-                                Toast.makeText(context, strings.playlistCreated, Toast.LENGTH_SHORT)
-                                    .show()
+                                selectedImageUri = null
+                                Toast.makeText(context, strings.playlistCreated, Toast.LENGTH_SHORT).show()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(strings.accept)
                     }
@@ -811,12 +908,9 @@ fun PlayerScreen(
                 dismissButton = {
                     TextButton(onClick = {
                         showCreatePlaylistDialog = false
-                        Unit
+                        selectedImageUri = null
                     }) {
-                        Text(
-                            strings.close,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        )
+                        Text(strings.cancel)
                     }
                 }
             )
@@ -884,63 +978,112 @@ fun PlayerScreen(
         }
 
         if (songToAddToPlaylist != null) {
-            AlertDialog(
+            ModalBottomSheet(
                 onDismissRequest = {
                     songToAddToPlaylist = null
-                    Unit
                 },
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                tonalElevation = 6.dp,
-                title = { Text(strings.addToPlaylist, color = MaterialTheme.colorScheme.primary) },
-                text = {
+                dragHandle = { BottomSheetDefaults.DragHandle() },
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 32.dp)
+                ) {
+                    Text(
+                        strings.addToPlaylist,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
                     if (playlistsNames.isEmpty()) {
-                        Text(
-                            strings.noPlaylists,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                strings.noPlaylists,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     } else {
-                        LazyColumn {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 400.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             items(playlistsNames.toList().sorted()) { playlistName ->
-                                ListItem(
-                                    headlineContent = {
-                                        Text(
-                                            playlistName,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    },
-                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                    modifier = Modifier.clickable {
+                                val playlistSongIds = PlaylistManager.getSongsInPlaylist(context, playlistName)
+                                
+                                Surface(
+                                    onClick = {
                                         songToAddToPlaylist?.let { song ->
                                             PlaylistManager.addSongToPlaylist(
                                                 context,
                                                 playlistName,
                                                 song.id
                                             )
-                                            Toast.makeText(
-                                                context,
-                                                strings.songAdded,
-                                                Toast.LENGTH_SHORT
-                                            ).show()
+                                            scope.launch {
+                                                globalSnackbarHostState.showSnackbar(strings.songAdded)
+                                            }
                                         }
                                         songToAddToPlaylist = null
+                                    },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.PlaylistPlay,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column {
+                                            Text(
+                                                playlistName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                "${playlistSongIds.size} ${if (playlistSongIds.size == 1) strings.song else strings.songs}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
                     }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        songToAddToPlaylist = null
-                        Unit
-                    }) {
-                        Text(
-                            strings.close,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    FilledTonalButton(
+                        onClick = {
+                            showCreatePlaylistDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(strings.createPlaylist)
                     }
                 }
-            )
+            }
         }
 
 
@@ -1231,15 +1374,14 @@ fun PlayerScreen(
                                             },
                                             onEqualizerClick = {
                                                 showEqualizerDialog = true
-                                                showMenu = false
-                                                Unit
                                             },
                                             onDownloadClick = {
                                                 currentTab = 3
                                                 browsingGenre = null
                                             },
+                                            onUpdateTags = handleUpdateTags,
                                             settings = settings,
-                                            getAlbumArt = { settings.getAlbumArt(it) }
+                                            getAlbumArt = { settings.getAlbumArt(it) },
                                         )
                                     }
 
@@ -1446,6 +1588,14 @@ fun PlayerScreen(
                                             SearchTab(
                                                 searchQuery = searchQuery,
                                                 onSearchQueryChange = { searchQuery = it },
+                                                searchHistory = searchHistory,
+                                                onHistoryItemClick = { 
+                                                    searchQuery = it
+                                                    addToSearchHistory(it)
+                                                },
+                                                onRemoveHistoryItem = { removeFromSearchHistory(it) },
+                                                onClearHistory = { clearSearchHistory() },
+                                                onSearchAction = { addToSearchHistory(it) },
                                                 songList = songList,
                                                 player = player,
                                                 currentMediaId = currentMediaId,
@@ -1454,7 +1604,9 @@ fun PlayerScreen(
                                                 onBrowsingGenreChange = { browsingGenre = it },
                                                 getAlbumArt = { settings.getAlbumArt(it) },
                                                 favoriteIds = favoriteIds,
-                                                onToggleFavoriteId = toggleFavorite
+                                                onToggleFavoriteId = toggleFavorite,
+                                                onAddToPlaylist = { songToAddToPlaylist = it },
+                                                onUpdateTags = handleUpdateTags
                                             )
                                         }
                                     }
@@ -1470,7 +1622,7 @@ fun PlayerScreen(
                                                 browsingFolder = null
                                             },
                                             tabs = tabs,
-                                            finalSortedSongs = filteredSongs,
+                                            finalSortedSongs = librarySongs,
                                             player = player,
                                             isPlaying = isPlaying,
                                             favoriteIds = favoriteIds,
@@ -1502,12 +1654,16 @@ fun PlayerScreen(
                                             showClearQueueConfirm = showClearQueueConfirm,
                                             onShowClearQueueConfirmChange = { showClearQueueConfirm = it },
                                             onVideoClick = { video ->
-                                                player?.setMediaItem(video.toMediaItem())
-                                                player?.prepare()
-                                                player?.play()
-                                                isVideoFullScreen = true
+                                                if (player?.currentMediaItem?.mediaId != video.id.toString()) {
+                                                    player?.setMediaItem(video.toMediaItem())
+                                                    player?.prepare()
+                                                    player?.play()
+                                                }
+                                                isPlayerVisible = true
+                                                forceCloseVideo = false // Asegurar que se muestre si estaba cerrado
+                                                // isVideoFullScreen = true // Eliminado para evitar pantalla completa automática
                                             },
-                                            searchQuery = searchQuery,
+                                            searchQuery = "",
                                             onCurrentTabChange = { currentTab = it },
                                             songsByArtist = songsByArtist,
                                             songsByAlbum = songsByAlbum,
@@ -1583,20 +1739,36 @@ fun PlayerScreen(
                             songList = songList,
                             settings = settings,
                             onTitleClick = {
-                                if (isVideoPlaying) {
-                                    isVideoFullScreen = true
-                                    activity?.requestedOrientation =
-                                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                if (isVideoPlaying || isVideoByMetadata) {
+                                    forceCloseVideo = false
+                                    isPlayerVisible = true
+                                    isVideoFullScreen = true // Se abre a pantalla completa al presionar la barra (acción explícita)
                                 } else {
                                     isSheetOpen = true
                                 }
                             },
-                            onCollapse = { isPlayerVisible = false },
+                            onCollapse = {
+                                if (isVideoPlaying || isVideoByMetadata) {
+                                    forceCloseVideo = true
+                                } else {
+                                    isPlayerVisible = false
+                                }
+                            },
                             getAlbumArt = { settings.getAlbumArt(it) },
-                            forceCloseVideo = forceCloseVideo,
-                            onRestoreVideo = { forceCloseVideo = false }
+                            forceCloseVideo = forceCloseVideo
                         )
                     }
+                }
+            }
+
+            if (showEqualizerDialog) {
+                androidx.compose.ui.window.Dialog(
+                    onDismissRequest = { showEqualizerDialog = false },
+                    properties = androidx.compose.ui.window.DialogProperties(
+                        usePlatformDefaultWidth = false
+                    )
+                ) {
+                    EcualizadorPanel(onClose = { showEqualizerDialog = false })
                 }
             }
 
@@ -1726,7 +1898,6 @@ fun PlayerScreen(
                                     forceCloseVideo = true
                                 }
                             },
-                            onRestoreVideo = { forceCloseVideo = false },
                             activity = activity,
                             videoResizeMode = videoResizeMode,
                             onToggleResize = {

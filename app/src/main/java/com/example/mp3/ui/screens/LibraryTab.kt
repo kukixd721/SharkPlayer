@@ -36,6 +36,21 @@ import com.example.mp3.ui.components.CompactAlbumCard
 import com.example.mp3.ui.components.VideoList
 import java.io.File
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.content.Intent
+import android.provider.DocumentsContract
+
+fun getPathFromUri(context: android.content.Context, uri: Uri): String? {
+    if (DocumentsContract.isTreeUri(uri)) {
+        val documentId = DocumentsContract.getTreeDocumentId(uri)
+        if (documentId.startsWith("primary:")) {
+            return android.os.Environment.getExternalStorageDirectory().toString() + "/" + documentId.split(":")[1]
+        }
+    }
+    return null
+}
 
 @Composable
 fun ToolbarActionIconButton(
@@ -220,35 +235,81 @@ fun LibraryTab(
 
                 Spacer(Modifier.width(12.dp))
 
-                var showSortMenu by remember { mutableStateOf(false) }
+                var showSortBottomSheet by remember { mutableStateOf(false) }
                 Box {
                     ToolbarActionIconButton(
-                        onClick = { showSortMenu = true },
+                        onClick = { showSortBottomSheet = true },
                         icon = Icons.AutoMirrored.Filled.Sort
                     )
                     
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false },
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .clip(RoundedCornerShape(16.dp))
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(strings.recentlyAdded, fontWeight = FontWeight.Bold) },
-                            onClick = { onSortOrderChange(0); showSortMenu = false },
-                            leadingIcon = { Icon(Icons.Default.Schedule, null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("A-Z", fontWeight = FontWeight.Bold) },
-                            onClick = { onSortOrderChange(1); showSortMenu = false },
-                            leadingIcon = { Icon(Icons.Default.SortByAlpha, null) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(strings.favorites, fontWeight = FontWeight.Bold) },
-                            onClick = { onSortOrderChange(2); showSortMenu = false },
-                            leadingIcon = { Icon(Icons.Default.Favorite, null) }
-                        )
+                    if (showSortBottomSheet) {
+                        ModalBottomSheet(
+                            onDismissRequest = { showSortBottomSheet = false },
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 32.dp)
+                            ) {
+                                Text(
+                                    text = "Ordenar por",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(24.dp)
+                                )
+                                
+                                val sortOptions = listOf(
+                                    Triple(0, strings.recentlyAdded, Icons.Default.Schedule),
+                                    Triple(1, "A-Z", Icons.Default.SortByAlpha),
+                                    Triple(2, strings.favorites, Icons.Default.Favorite),
+                                    Triple(3, strings.artists, Icons.Default.Person),
+                                    Triple(4, strings.albums, Icons.Default.Album)
+                                )
+                                
+                                sortOptions.forEach { (id, label, icon) ->
+                                    Surface(
+                                        onClick = { 
+                                            onSortOrderChange(id)
+                                            showSortBottomSheet = false 
+                                        },
+                                        color = if (sortOrder == id) MaterialTheme.colorScheme.primaryContainer 
+                                                else Color.Transparent,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .padding(horizontal = 24.dp, vertical = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = null,
+                                                tint = if (sortOrder == id) MaterialTheme.colorScheme.primary 
+                                                       else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(16.dp))
+                                            Text(
+                                                text = label,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = if (sortOrder == id) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (sortOrder == id) MaterialTheme.colorScheme.onPrimaryContainer 
+                                                       else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            if (sortOrder == id) {
+                                                Spacer(Modifier.weight(1f))
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -570,8 +631,9 @@ fun LibraryTab(
                                     .filter { it.title.contains(searchQuery, ignoreCase = true) }
 
                                 player?.let { p ->
+                                    val playlistName = currentBrowsingPlaylist
                                     components.SubMusicList(
-                                        currentBrowsingPlaylist,
+                                        playlistName,
                                         playlistSongs,
                                         p,
                                         isPlaying,
@@ -604,6 +666,11 @@ fun LibraryTab(
                                                 p.play()
                                             },
                                             onAddToPlaylist = onAddToPlaylist,
+                                            onRemoveFromPlaylist = { song ->
+                                                PlaylistManager.removeSongFromPlaylist(context, playlistName, song.id)
+                                                onBrowsingPlaylistChange(playlistName) // Refresh
+                                                Toast.makeText(context, strings.libraryUpdated, Toast.LENGTH_SHORT).show()
+                                            },
                                             onDeleteSong = { song ->
                                                 try {
                                                     val file = File(song.data)
@@ -617,8 +684,8 @@ fun LibraryTab(
                                             settings = settings
                                         ),
                                         { onBrowsingPlaylistChange(null) },
-                                        PlaylistManager.getPlaylistImage(context, currentBrowsingPlaylist),
-                                        { onEditPlaylist(currentBrowsingPlaylist) }
+                                        PlaylistManager.getPlaylistImage(context, playlistName),
+                                        { onEditPlaylist(playlistName) }
                                     )
                                 }
                             }
@@ -810,16 +877,58 @@ fun LibraryTab(
                     }
 
                     7 -> { // VIDEOS
-                        VideoList(
-                            videos = videos,
-                            onVideoClick = { video ->
-                                player?.setMediaItem(video.toMediaItem())
-                                player?.prepare()
-                                player?.play()
-                                onVideoFullScreenChange(true)
-                            },
-                            settings = settings
-                        )
+                        val folderPickerLauncher = rememberLauncherForActivityResult(
+                            contract = ActivityResultContracts.OpenDocumentTree()
+                        ) { uri: Uri? ->
+                            uri?.let {
+                                val path = getPathFromUri(context, it)
+                                if (path != null) {
+                                    settings.onToggleExtraVideoPath(path)
+                                } else {
+                                    Toast.makeText(context, "No se pudo obtener la ruta de la carpeta", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Mis Videos",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                IconButton(onClick = { folderPickerLauncher.launch(null) }) {
+                                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Añadir carpeta de videos")
+                                }
+                            }
+                            
+                            if (settings.extraVideoPaths.isNotEmpty()) {
+                                Text(
+                                    text = "Carpetas añadidas: ${settings.extraVideoPaths.size}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
+
+                            VideoList(
+                                videos = videos,
+                                onVideoClick = { video ->
+                                    if (player?.currentMediaItem?.mediaId != video.id.toString()) {
+                                        player?.setMediaItem(video.toMediaItem())
+                                        player?.prepare()
+                                        player?.play()
+                                    }
+                                },
+                                settings = settings
+                            )
+                        }
                     }
 
                     8 -> { // SETTINGS (INTERNAL)

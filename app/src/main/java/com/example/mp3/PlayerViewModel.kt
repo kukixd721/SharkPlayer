@@ -103,6 +103,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var ignoredFolders by mutableStateOf(
         appPrefs.getStringSet("ignored_folders", emptySet()) ?: emptySet()
     )
+    
+    var extraVideoPaths by mutableStateOf(
+        appPrefs.getStringSet("extra_video_paths", emptySet()) ?: emptySet()
+    )
 
     // Playback state tracked in VM
     var sleepTimerRemaining by mutableLongStateOf(0L)
@@ -123,9 +127,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun loadSongs() {
         viewModelScope.launch(Dispatchers.IO) {
             // CARGA RELÁMPAGO: Solo lo que MediaStore ya tiene listo
-            val music = getAudioFiles(context).filter { song ->
-                ignoredFolders.none { ignored -> song.data.startsWith(ignored) }
-            }
+            val music = getAudioFiles(context)
             
             withContext(Dispatchers.Main) {
                 cancionesState.value = music
@@ -137,9 +139,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 delay(8000) 
                 
                 if (isActive) {
-                    val videos = getVideoFiles(context).filter { video ->
-                        ignoredFolders.none { ignored -> video.data.startsWith(ignored) }
-                    }
+                    val videos = getVideoFiles(context, extraVideoPaths.toList())
                     withContext(Dispatchers.Main) {
                         videosState.value = videos
                     }
@@ -159,9 +159,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             isScanning.value = true
             scanStatus.value = strings.searchingAudio
-            val iniciales = getAudioFiles(context).filter { song ->
-                ignoredFolders.none { ignored -> song.data.startsWith(ignored) }
-            }
+            val iniciales = getAudioFiles(context)
 
             withContext(Dispatchers.Main) {
                 cancionesState.value = iniciales
@@ -178,9 +176,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 scanStatus.value = "${strings.processing}: ${song.title}"
             }
 
-            val actualizadas = getAudioFiles(context).filter { song ->
-                ignoredFolders.none { ignored -> song.data.startsWith(ignored) }
-            }
+            val actualizadas = getAudioFiles(context)
             withContext(Dispatchers.Main) {
                 cancionesState.value = actualizadas
                 isScanning.value = false
@@ -189,16 +185,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun toggleIgnoreFolder(folderPath: String) {
-        val current = ignoredFolders.toMutableSet()
-        if (current.contains(folderPath)) {
-            current.remove(folderPath)
+    fun toggleExtraVideoPath(path: String) {
+        val current = extraVideoPaths.toMutableSet()
+        if (current.contains(path)) {
+            current.remove(path)
         } else {
-            current.add(folderPath)
+            current.add(path)
+        }
+        extraVideoPaths = current
+        appPrefs.edit { putStringSet("extra_video_paths", current) }
+        loadSongs()
+    }
+
+    fun toggleIgnoreFolder(path: String) {
+        val current = ignoredFolders.toMutableSet()
+        if (current.contains(path)) {
+            current.remove(path)
+        } else {
+            current.add(path)
         }
         ignoredFolders = current
         appPrefs.edit { putStringSet("ignored_folders", current) }
-        loadSongs() // Recargar para aplicar el filtro
+        loadSongs()
     }
 
     fun setMediaController(controller: MediaController?) {

@@ -1,17 +1,9 @@
 package com.example.mp3.ui.screens
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -28,26 +20,20 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.graphicsLayer
 import kotlin.math.absoluteValue
-import androidx.core.net.toUri
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.mp3.LocalStrings
-import com.example.mp3.R
 import com.example.mp3.Song
 import com.example.mp3.SongDetails
 import com.example.mp3.ui.components.GenreCard
@@ -63,6 +49,11 @@ import kotlinx.coroutines.withContext
 fun SearchTab(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    searchHistory: List<String> = emptyList(),
+    onHistoryItemClick: (String) -> Unit = {},
+    onRemoveHistoryItem: (String) -> Unit = {},
+    onClearHistory: () -> Unit = {},
+    onSearchAction: (String) -> Unit = {},
     songList: List<Song>,
     player: Player,
     currentMediaId: String,
@@ -71,7 +62,9 @@ fun SearchTab(
     onBrowsingGenreChange: (String?) -> Unit,
     getAlbumArt: (String) -> ByteArray?,
     favoriteIds: Set<Long>,
-    onToggleFavoriteId: (Long) -> Unit
+    onToggleFavoriteId: (Long) -> Unit,
+    onAddToPlaylist: (Song) -> Unit,
+    onUpdateTags: (Song, String, String, String, String, String, String, ByteArray?) -> Unit
 ) {
     val strings = LocalStrings.current
     val context = LocalContext.current
@@ -131,7 +124,10 @@ fun SearchTab(
                     Toast.makeText(context, strings.addedToQueue, Toast.LENGTH_SHORT).show()
                     showMenuForSong = null
                 },
-                onAddToPlaylist = { showMenuForSong = null },
+                onAddToPlaylist = { 
+                    onAddToPlaylist(song)
+                    showMenuForSong = null 
+                },
                 onDelete = { showMenuForSong = null },
                 onEditTags = { 
                     showTagEditor = song
@@ -141,9 +137,7 @@ fun SearchTab(
                     showMetadataDialog = true
                 },
                 onShare = { /* Share logic */ },
-                getAlbumArt = { getAlbumArt(it) },
-                favoriteIds = favoriteIds,
-                onToggleFavoriteId = onToggleFavoriteId
+                getAlbumArt = { getAlbumArt(it) }
             )
         }
 
@@ -171,7 +165,7 @@ fun SearchTab(
             details = songDetailsForEditor!!,
             onDismiss = { showTagEditor = null },
             onSave = { t, ar, al, y, tr, g, art ->
-                // onUpdateTags(showTagEditor!!, t, ar, al, y, tr, g, art)
+                onUpdateTags(showTagEditor!!, t, ar, al, y, tr, g, art)
                 showTagEditor = null
             }
         )
@@ -463,6 +457,15 @@ fun SearchTab(
                         }
                     }
                 } else null,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSearch = { 
+                        onSearchAction(searchQuery)
+                        // Esconder teclado si es necesario, aunque en Compose suele manejarse solo con el IME action
+                    }
+                ),
                 shape = RoundedCornerShape(24.dp),
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
@@ -547,6 +550,63 @@ fun SearchTab(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    if (searchHistory.isNotEmpty()) {
+                        item(span = { GridItemSpan(2) }) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Búsquedas recientes",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                TextButton(onClick = onClearHistory) {
+                                    Text("Borrar todo", style = MaterialTheme.typography.labelLarge)
+                                }
+                            }
+                        }
+
+                        items(searchHistory, span = { GridItemSpan(2) }) { historyItem ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onHistoryItemClick(historyItem) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Text(
+                                    text = historyItem,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { onRemoveHistoryItem(historyItem) }) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Eliminar",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        item(span = { GridItemSpan(2) }) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+
                     item(span = { GridItemSpan(2) }) {
                         Text(
                             text = strings.browseByGenre,

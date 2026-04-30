@@ -42,6 +42,7 @@ data class Song(
                 .setTitle(title)
                 .setArtist(artist)
                 .setAlbumTitle(album)
+                .setGenre(genre)
                 .build()
         )
         .build()
@@ -55,7 +56,8 @@ data class Video(
     val duration: Long,
     val resolution: String? = null,
     val bitrate: String? = null,
-    val frameRate: String? = null
+    val frameRate: String? = null,
+    val thumbnailUri: String? = null
 ) {
     fun toMediaItem(): MediaItem = MediaItem.Builder()
         .setMediaId(id.toString())
@@ -148,9 +150,10 @@ suspend fun getAudioFiles(context: Context, onProgress: (String) -> Unit = {}): 
     songs
 }
 
-suspend fun getVideoFiles(context: Context, onProgress: (String) -> Unit = {}): List<Video> = withContext(Dispatchers.IO) {
+suspend fun getVideoFiles(context: Context, extraPaths: List<String> = emptyList(), onProgress: (String) -> Unit = {}): List<Video> = withContext(Dispatchers.IO) {
     val videos = mutableListOf<Video>()
     
+    // 1. Get videos from MediaStore
     val projection = arrayOf(
         MediaStore.Video.Media._ID,
         MediaStore.Video.Media.TITLE,
@@ -173,44 +176,93 @@ suspend fun getVideoFiles(context: Context, onProgress: (String) -> Unit = {}): 
 
         while (cursor.moveToNext()) {
             val title = cursor.getString(titleCol) ?: "Unknown Video"
+            val videoPath = cursor.getString(dataCol) ?: ""
             onProgress("🎬 $title")
             
-            val videoPath = cursor.getString(dataCol) ?: ""
-            
-            // extract metadata
-            var extraBitrate: String? = null
-            var extraFrameRate: String? = null
-            
-            try {
-                val retriever = MediaMetadataRetriever()
-                retriever.setDataSource(videoPath)
-                val br = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-                if (br != null) {
-                    extraBitrate = (br.toLong() / 1000).toString() + " kbps"
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    extraFrameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
-                }
-                retriever.release()
-            } catch (e: Exception) {
-                Log.e("VideoMetadata", "Error extracting extra metadata for $videoPath", e)
-            }
-
-            videos.add(
-                Video(
-                    id = cursor.getLong(idCol),
-                    title = title,
-                    artist = cursor.getString(artistCol) ?: "Unknown Artist",
-                    data = videoPath,
-                    duration = cursor.getLong(durationCol),
-                    resolution = cursor.getString(resCol),
-                    bitrate = extraBitrate,
-                    frameRate = extraFrameRate
-                )
-            )
+            videos.add(processVideoFile(videoPath, cursor.getLong(idCol), title, cursor.getString(artistCol), cursor.getLong(durationCol), cursor.getString(resCol)))
         }
     }
+
+    // 2. Scan extra paths manually
+    extraPaths.forEach { path ->
+        val folder = File(path)
+        if (folder.exists() && folder.isDirectory) {
+            folder.listFiles { file -> 
+                val ext = file.extension.lowercase()
+                ext == "mp4" || ext == "mkv" || ext == "webm" || ext == "avi"
+            }?.forEach { file ->
+                if (videos.none { it.data == file.absolutePath }) {
+                    onProgress("🎬 ${file.nameWithoutExtension}")
+                    videos.add(processVideoFile(file.absolutePath, file.hashCode().toLong(), file.nameWithoutExtension, null, 0L, null))
+                }
+            }
+        }
+    }
+
     videos
+}
+
+private fun processVideoFile(
+    videoPath: String,
+    id: Long,
+    title: String,
+    artist: String?,
+    duration: Long,
+    resolution: String?
+): Video {
+    var extraBitrate: String? = null
+    var extraFrameRate: String? = null
+    var finalDuration = duration
+    var finalRes = resolution
+
+    try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(videoPath)
+        
+        if (finalDuration <= 0) {
+            val dur = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            if (dur != null) finalDuration = dur.toLong()
+        }
+        
+        if (finalRes == null) {
+            val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            if (w != null && h != null) finalRes = "${w}x${h}"
+        }
+
+        val br = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+        if (br != null) {
+            extraBitrate = (br.toLong() / 1000).toString() + " kbps"
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            extraFrameRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)
+        }
+        retriever.release()
+    } catch (e: Exception) {
+        Log.e("VideoMetadata", "Error extracting extra metadata for $videoPath", e)
+    }
+
+    // Check for sidecar thumbnail
+    val videoFile = File(videoPath)
+    val parent = videoFile.parentFile
+    val baseName = videoFile.nameWithoutExtension
+    
+    val thumbFile = parent?.listFiles { _, name ->
+        val lower = name.lowercase()
+        lower.startsWith(baseName.lowercase()) && (lower.endsWith(".jpg") || lower.endsWith(".png") || lower.endsWith(".jpeg") || lower.endsWith(".webp"))
+    }?.firstOrNull()
+
+    return Video(
+        id = id,
+        title = title,
+        artist = artist ?: "Unknown Artist",
+        data = videoPath,
+        duration = finalDuration,
+        resolution = finalRes,
+        bitrate = extraBitrate,
+        frameRate = extraFrameRate,
+        thumbnailUri = thumbFile?.absolutePath
+    )
 }
 
 fun getAudioMetadata(context: Context, path: String): SongDetails {

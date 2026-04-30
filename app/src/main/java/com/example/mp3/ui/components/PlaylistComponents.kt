@@ -139,7 +139,6 @@ fun PlaylistList(
 
                                 var showOptions by remember { mutableStateOf(false) }
                                 var showRenameDialog by remember { mutableStateOf(false) }
-                                var newName by remember { mutableStateOf(playlistName) }
 
                                 Column(
                                     modifier = Modifier
@@ -270,33 +269,61 @@ fun PlaylistList(
                                     }
 
                                     if (showRenameDialog) {
+                                        var editingName by remember { mutableStateOf(playlistName) }
                                         AlertDialog(
                                             onDismissRequest = { showRenameDialog = false },
-                                            title = { Text(strings.editPlaylist) },
-                                            shape = RoundedCornerShape(28.dp),
+                                            title = { 
+                                                Column {
+                                                    Text(strings.editPlaylist, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                                    Text(strings.enterPlaylistName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(32.dp),
                                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                                             text = {
-                                            OutlinedTextField(
-                                                value = newName,
-                                                onValueChange = { newName = it },
-                                                label = { Text(strings.enterPlaylistName) },
-                                                singleLine = true,
-                                                shape = RoundedCornerShape(16.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                                    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                                    focusedLabelColor = MaterialTheme.colorScheme.primary,
-                                                    unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                                                )
-                                            )
+                                                Column(modifier = Modifier.padding(top = 8.dp)) {
+                                                    OutlinedTextField(
+                                                        value = editingName,
+                                                        onValueChange = { editingName = it },
+                                                        placeholder = { Text(playlistName) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(16.dp),
+                                                        colors = OutlinedTextFieldDefaults.colors(
+                                                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                            unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                                                            unfocusedLabelColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                                        )
+                                                    )
+                                                    
+                                                    Spacer(modifier = Modifier.height(16.dp))
+                                                    
+                                                    // Botón rápido para cambiar imagen dentro del diálogo de edición
+                                                    FilledTonalButton(
+                                                        onClick = {
+                                                            currentTargetPlaylist = playlistName
+                                                            launcher.launch("image/*")
+                                                        },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ) {
+                                                        Icon(Icons.Default.Image, null)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(strings.changeCover)
+                                                    }
+                                                }
                                             },
                                             confirmButton = {
-                                                TextButton(onClick = {
-                                                    if (newName.isNotBlank() && newName != playlistName) {
-                                                        onRenamePlaylist(playlistName, newName)
-                                                    }
-                                                    showRenameDialog = false
-                                                }) {
+                                                Button(
+                                                    onClick = {
+                                                        if (editingName.isNotBlank() && editingName != playlistName) {
+                                                            onRenamePlaylist(playlistName, editingName)
+                                                        }
+                                                        showRenameDialog = false
+                                                    },
+                                                    shape = RoundedCornerShape(16.dp)
+                                                ) {
                                                     Text(strings.save)
                                                 }
                                             },

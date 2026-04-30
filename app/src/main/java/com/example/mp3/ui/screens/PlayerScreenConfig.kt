@@ -92,7 +92,9 @@ data class PlayerSettings(
     val backgroundAlpha: Float,
     val onBackgroundAlphaChange: (Float) -> Unit,
     val useImageDynamicColor: Boolean,
-    val onUseImageDynamicColorChange: (Boolean) -> Unit
+    val onUseImageDynamicColorChange: (Boolean) -> Unit,
+    val extraVideoPaths: Set<String>,
+    val onToggleExtraVideoPath: (String) -> Unit
 )
 
 data class MusicListConfig(
@@ -106,6 +108,7 @@ data class MusicListConfig(
     val onMoveQueueItem: (Int, Int) -> Unit = { _, _ -> },
     val isDraggable: Boolean = false,
     val onDeleteSong: (Song) -> Unit = {},
+    val onRemoveFromPlaylist: ((Song) -> Unit)? = null,
     val onUpdateTags: (Song, String, String, String, String, String, String, ByteArray?) -> Unit = { _, _, _, _, _, _, _, _ -> },
     val onPlayAll: (List<Song>, Int) -> Unit = { _, _ -> },
     val settings: PlayerSettings,

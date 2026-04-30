@@ -250,8 +250,8 @@ fun FullPlayerSheet(
                                                         AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
                                             },
                                             onToggleFullScreen = {
-                                                isVideoFullScreen = true
-                                                showVideoControls = true
+                                                // isVideoFullScreen = true // Eliminado para evitar forzar pantalla completa
+                                                // showVideoControls = true
                                             },
                                             playbackSpeed = playbackSpeed,
                                             onSpeedChange = {

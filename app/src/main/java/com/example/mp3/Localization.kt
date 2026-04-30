@@ -148,6 +148,7 @@ interface AppStrings {
     val changeCover: String
     val playlistCreated: String
     val playlistDeleted: String
+    val removeFromPlaylist: String
     val songAdded: String
     val enterPlaylistName: String
     val noArtists: String
@@ -468,6 +469,7 @@ object SpanishStrings : AppStrings {
     override val changeCover = "Cambiar portada"
     override val playlistCreated = "Lista creada con éxito"
     override val playlistDeleted = "Lista eliminada"
+    override val removeFromPlaylist = "Quitar de la lista"
     override val songAdded = "Canción añadida a la lista"
     override val enterPlaylistName = "Nombre de la lista"
     override val noArtists = "No se encontraron artistas"
@@ -793,6 +795,7 @@ object EnglishStrings : AppStrings {
     override val changeCover = "Change cover"
     override val playlistCreated = "Playlist created successfully"
     override val playlistDeleted = "Playlist deleted"
+    override val removeFromPlaylist = "Remove from playlist"
     override val songAdded = "Song added to playlist"
     override val enterPlaylistName = "Playlist name"
     override val noArtists = "No artists found"
